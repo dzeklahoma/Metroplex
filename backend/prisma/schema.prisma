@@ -1,11 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -30,11 +22,13 @@ model Trip {
   destination String
   daysCount   Int
   budget      Float
-  interests   String   
+  interests   String
   createdAt   DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   dayPlans    DayPlan[]
+
+  @@index([userId])
 }
 
 model DayPlan {
@@ -44,6 +38,9 @@ model DayPlan {
 
   trip      Trip  @relation(fields: [tripId], references: [id], onDelete: Cascade)
   plannedActivities PlannedActivity[]
+
+  @@unique([tripId, dayNumber])
+  @@index([tripId])
 }
 
 model Activity {
@@ -59,8 +56,8 @@ model Activity {
   plannedActivities PlannedActivity[]
 
   @@unique([destination, name], name: "destination_name")
+  @@index([destination])
 }
-
 
 model PlannedActivity {
   id         Int @id @default(autoincrement())
@@ -69,8 +66,8 @@ model PlannedActivity {
   orderIndex Int
 
   dayPlan    DayPlan   @relation(fields: [dayPlanId], references: [id], onDelete: Cascade)
-  activity   Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  activity   Activity  @relation(fields: [activityId], references: [id])
 
   @@unique([dayPlanId, orderIndex])
+  @@index([activityId])
 }
-
