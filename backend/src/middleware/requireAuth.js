@@ -20,8 +20,7 @@ export function requireAuth(req, res, next) {
 
     const payload = jwt.verify(token, secret);
 
-    // očekujemo da na login-u u token staviš bar user id
-    // npr: { id, email, role }
+    // ie: { id, email, role }
     req.user = payload;
 
     next();
