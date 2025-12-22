@@ -21,7 +21,7 @@ model Trip {
   userId      Int
   destination String
   daysCount   Int
-  budget      Float
+  budget      Float?
   interests   String
   createdAt   DateTime @default(now())
 

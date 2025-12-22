@@ -1,11 +1,33 @@
-function normalizeInterests(interestsStr) {
+export type Activity = {
+  id: number;
+  destination?: string;
+  name?: string;
+  type?: string | null;
+  durationHours?: number | null;
+  priceLevel?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+export type GenerateItineraryInput = {
+  activities: Activity[];
+  daysCount: number;
+  interests: string;
+};
+
+export type GenerateItineraryResult = {
+  days: Activity[][];
+  warning: string | null;
+};
+
+function normalizeInterests(interestsStr: string): string[] {
   return interestsStr
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 }
 
-function scoreActivity(activity, interests) {
+function scoreActivity(activity: Activity, interests: string[]): number {
   let score = 0;
 
   const type = (activity.type || "").toLowerCase();
@@ -31,7 +53,11 @@ function scoreActivity(activity, interests) {
 /**
  * returns { days: Activity[][], warning: string|null }
  */
-export function generateItinerary({ activities, daysCount, interests }) {
+export function generateItinerary({
+  activities,
+  daysCount,
+  interests,
+}: GenerateItineraryInput): GenerateItineraryResult {
   const interestsArr = normalizeInterests(interests);
 
   const ranked = [...activities].sort((a, b) => {
@@ -41,7 +67,7 @@ export function generateItinerary({ activities, daysCount, interests }) {
   });
 
   // round-robin distribution (by days)
-  const days = Array.from({ length: daysCount }, () => []);
+  const days = Array.from({ length: daysCount }, () => [] as Activity[]);
   let idx = 0;
 
   for (const act of ranked) {
