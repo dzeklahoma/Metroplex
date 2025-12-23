@@ -211,8 +211,14 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/:id/regenerate", requireAuth, async (req, res) => {
-  try {
+type RegenerateBody = {
+  interests?: string;
+};
+
+router.post(
+  "/:id/regenerate",
+  requireAuth,
+  async (req: Request<{ id: string }, {}, RegenerateBody>, res: Response) => {
     const userId = req.user!.userId;
     const tripId = Number(req.params.id);
 
@@ -220,107 +226,165 @@ router.post("/:id/regenerate", requireAuth, async (req, res) => {
       return res.status(404).json({ message: "Trip not found" });
     }
 
-    // 1) check if the trips exists + ownership
-    const base = await prisma.trip.findUnique({
-      where: { id: tripId },
-      select: {
-        id: true,
-        userId: true,
-        destination: true,
-        daysCount: true,
-        interests: true,
-      },
-    });
+    // Lock window (auto-expire) to prevent double-clicks and avoid permanent locks
+    const now = new Date();
+    const lockTtlMs = 2 * 60 * 1000; // 2 minutes
+    const lockUntil = new Date(Date.now() + lockTtlMs);
 
-    if (!base) return res.status(404).json({ message: "Trip not found" });
-    if (base.userId !== userId)
-      return res.status(403).json({ message: "Forbidden" });
-
-    // 2) load destination activities
-    const activities = await prisma.activity.findMany({
-      where: { destination: base.destination },
-    });
-
-    // 3) generate a new plan
-    const plan = generateItinerary({
-      activities,
-      daysCount: base.daysCount,
-      interests: base.interests,
-    });
-
-    // 4) tx: delete old plan + generate a new one
-    const savedTrip = await prisma.$transaction(async (tx) => {
-      // load all day plans for this trip
-      const dayPlans = await tx.dayPlan.findMany({
-        where: { tripId },
-        select: { id: true, dayNumber: true },
-        orderBy: { dayNumber: "asc" },
+    try {
+      // 1) Load base trip data (keeps 404 vs 403 behavior)
+      const base = await prisma.trip.findUnique({
+        where: { id: tripId },
+        select: {
+          id: true,
+          userId: true,
+          destination: true,
+          daysCount: true,
+          interests: true,
+          regenLockUntil: true,
+        },
       });
 
-      // delete plannedActivities for those day plans
-      const dayPlanIds = dayPlans.map((dp) => dp.id);
+      if (!base) return res.status(404).json({ message: "Trip not found" });
+      if (base.userId !== userId)
+        return res.status(403).json({ message: "Forbidden" });
 
-      if (dayPlanIds.length > 0) {
-        await tx.plannedActivity.deleteMany({
-          where: { dayPlanId: { in: dayPlanIds } },
-        });
+      // 2) Acquire lock (only if lock is missing or expired)
+      const lockResult = await prisma.trip.updateMany({
+        where: {
+          id: tripId,
+          userId,
+          OR: [{ regenLockUntil: null }, { regenLockUntil: { lt: now } }],
+        },
+        data: { regenLockUntil: lockUntil },
+      });
 
-        // delete dayPlans
-        await tx.dayPlan.deleteMany({
-          where: { tripId },
-        });
+      if (lockResult.count === 0) {
+        // Another regen is in progress (double-click or parallel request)
+        return res
+          .status(409)
+          .json({ message: "Regeneration already in progress" });
       }
 
-      // create new dayPlans
-      const newDayPlans = [];
-      for (let d = 1; d <= base.daysCount; d++) {
-        const dp = await tx.dayPlan.create({
-          data: { tripId, dayNumber: d },
-        });
-        newDayPlans.push(dp);
-      }
+      // 3) Decide interests (optional override)
+      const incomingInterests = req.body?.interests;
 
-      // add plannedActivities per plan
-      for (let d = 1; d <= base.daysCount; d++) {
-        const dp = newDayPlans[d - 1];
-        const dayItems = plan.days[d - 1] ?? [];
-
-        for (let i = 0; i < dayItems.length; i++) {
-          await tx.plannedActivity.create({
-            data: {
-              dayPlanId: dp.id,
-              activityId: dayItems[i].id,
-              orderIndex: i + 1,
-            },
-          });
+      if (incomingInterests !== undefined) {
+        if (
+          typeof incomingInterests !== "string" ||
+          incomingInterests.trim() === ""
+        ) {
+          return res
+            .status(400)
+            .json({ message: "interests must be a non-empty string" });
         }
       }
 
-      // return full nested trip
-      return tx.trip.findUnique({
-        where: { id: tripId },
-        include: {
-          dayPlans: {
-            orderBy: { dayNumber: "asc" },
-            include: {
-              plannedActivities: {
-                orderBy: { orderIndex: "asc" },
-                include: { activity: true },
+      const effectiveInterests =
+        typeof incomingInterests === "string" && incomingInterests.trim() !== ""
+          ? incomingInterests.trim()
+          : base.interests;
+
+      // 4) Fetch activities (fallback if empty)
+      const activities = await prisma.activity.findMany({
+        where: { destination: base.destination },
+      });
+
+      const plan =
+        activities.length === 0
+          ? {
+              days: Array.from({ length: base.daysCount }, () => [] as any[]),
+              warning: "No activities found for destination",
+            }
+          : generateItinerary({
+              activities,
+              daysCount: base.daysCount,
+              interests: effectiveInterests,
+            });
+
+      // 5) Persist: delete old plan + optionally update interests + create new plan
+      const savedTrip = await prisma.$transaction(async (tx) => {
+        // Delete old planned activities + day plans
+        const existingDayPlans = await tx.dayPlan.findMany({
+          where: { tripId },
+          select: { id: true },
+        });
+
+        const dayPlanIds = existingDayPlans.map((dp) => dp.id);
+
+        if (dayPlanIds.length > 0) {
+          await tx.plannedActivity.deleteMany({
+            where: { dayPlanId: { in: dayPlanIds } },
+          });
+
+          await tx.dayPlan.deleteMany({ where: { tripId } });
+        }
+
+        // Update trip interests if overridden
+        if (effectiveInterests !== base.interests) {
+          await tx.trip.update({
+            where: { id: tripId },
+            data: { interests: effectiveInterests },
+          });
+        }
+
+        // Create new day plans
+        const newDayPlans = [];
+        for (let d = 1; d <= base.daysCount; d++) {
+          const dp = await tx.dayPlan.create({
+            data: { tripId, dayNumber: d },
+          });
+          newDayPlans.push(dp);
+        }
+
+        // Create planned activities (if plan is empty, this loop just does nothing)
+        for (let d = 1; d <= base.daysCount; d++) {
+          const dp = newDayPlans[d - 1];
+          const dayItems = plan.days[d - 1] ?? [];
+
+          for (let i = 0; i < dayItems.length; i++) {
+            await tx.plannedActivity.create({
+              data: {
+                dayPlanId: dp.id,
+                activityId: dayItems[i].id,
+                orderIndex: i + 1,
+              },
+            });
+          }
+        }
+
+        return tx.trip.findUnique({
+          where: { id: tripId },
+          include: {
+            dayPlans: {
+              orderBy: { dayNumber: "asc" },
+              include: {
+                plannedActivities: {
+                  orderBy: { orderIndex: "asc" },
+                  include: { activity: true },
+                },
               },
             },
           },
-        },
+        });
       });
-    });
 
-    return res.json({
-      trip: savedTrip,
-      warning: plan.warning,
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Server error" });
+      return res.json({ trip: savedTrip, warning: plan.warning });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Server error" });
+    } finally {
+      // Best-effort unlock (even if planner/transaction fails)
+      try {
+        await prisma.trip.updateMany({
+          where: { id: tripId, userId },
+          data: { regenLockUntil: null },
+        });
+      } catch {
+        // ignore unlock errors
+      }
+    }
   }
-});
+);
 
 export default router;

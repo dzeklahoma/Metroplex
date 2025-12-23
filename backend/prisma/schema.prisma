@@ -25,6 +25,8 @@ model Trip {
   interests   String
   createdAt   DateTime @default(now())
 
+  regenLockUntil DateTime? // prevents double-click regen; auto-expires
+  
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   dayPlans    DayPlan[]
 
