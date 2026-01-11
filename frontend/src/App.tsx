@@ -1,16 +1,34 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { ProtectedRoute } from "./auth/ProtectedRoute";
+
 import { AuthPage } from "./pages/AuthPage";
 import { TripsPage } from "./pages/TripsPage";
 
+function HomeRedirect() {
+  const { token, loading } = useAuth();
+  if (loading) return <div className="p-6">Loading...</div>;
+  return <Navigate to={token ? "/trips" : "/auth"} replace />;
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/auth" replace />} />
-        <Route path="/auth" element={<AuthPage />} />
-        <Route path="/trips" element={<TripsPage />} />
-        <Route path="*" element={<Navigate to="/auth" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route
+            path="/trips"
+            element={
+              <ProtectedRoute>
+                <TripsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
