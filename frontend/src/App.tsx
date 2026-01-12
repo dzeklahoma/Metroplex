@@ -4,6 +4,7 @@ import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { CreateTripPage } from "./pages/CreateTripPage";
 import { AuthPage } from "./pages/AuthPage";
 import { TripsPage } from "./pages/TripsPage";
+import { TripDetailsPage } from "./pages/TripDetailsPage";
 
 function HomeRedirect() {
   const { token, loading } = useAuth();
@@ -32,6 +33,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <CreateTripPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/trips/:id"
+            element={
+              <ProtectedRoute>
+                <TripDetailsPage />
               </ProtectedRoute>
             }
           />

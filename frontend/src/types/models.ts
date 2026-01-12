@@ -19,3 +19,28 @@ export type Trip = {
   interests: string;
   createdAt: string;
 };
+
+export type PlannedActivity = {
+  id: number;
+  dayPlanId: number;
+  activityId: number;
+  orderIndex: number;
+  activity?: {
+    id: number;
+    name: string;
+    type: string;
+    cost?: number | null;
+    durationMin?: number | null;
+    destination?: string;
+  } | null;
+};
+
+export type DayPlan = {
+  id: number;
+  dayNumber: number;
+  plannedActivities: PlannedActivity[];
+};
+
+export type TripDetails = Trip & {
+  dayPlans: DayPlan[];
+};
