@@ -1,19 +1,43 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import * as tripsApi from "../api/tripsApi";
+import type { Trip } from "../types/models";
+import { TripCard } from "../components/TripCard";
+import { Card } from "../components/Card";
 
 export function TripsPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   async function onLogout() {
     await logout();
     navigate("/auth", { replace: true });
   }
 
+  useEffect(() => {
+    (async () => {
+      setError(null);
+      setLoading(true);
+      try {
+        const res = await tripsApi.getMyTrips();
+        setTrips(res.trips);
+      } catch (e: any) {
+        setError(e?.message ?? "Failed to load trips");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
   return (
     <div className="min-h-screen p-6">
       <div className="mx-auto max-w-4xl">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold">My Trips</h1>
             <p className="text-sm text-gray-600">
@@ -24,16 +48,51 @@ export function TripsPage() {
             </p>
           </div>
 
-          <button
-            onClick={onLogout}
-            className="rounded-xl border border-black/10 px-4 py-2 hover:bg-black/5"
-          >
-            Logout
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/trips/new")}
+              className="rounded-xl bg-black px-4 py-2 font-medium text-white"
+            >
+              Create trip
+            </button>
+
+            <button
+              onClick={onLogout}
+              className="rounded-xl border border-black/10 px-4 py-2 hover:bg-black/5"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
-        <div className="mt-8 rounded-2xl border border-black/10 bg-white p-6">
-          Trips listing dolazi u sledećim koracima (GET /api/trips/my).
+        <div className="mt-8">
+          {loading && <Card>Loading trips...</Card>}
+
+          {!loading && error && (
+            <Card className="border-red-200 bg-red-50 text-red-700">
+              {error}
+            </Card>
+          )}
+
+          {!loading && !error && trips.length === 0 && (
+            <Card>
+              <div className="text-sm text-gray-700">No trips yet.</div>
+              <button
+                onClick={() => navigate("/trips/new")}
+                className="mt-3 rounded-xl bg-black px-4 py-2 font-medium text-white"
+              >
+                Create your first trip
+              </button>
+            </Card>
+          )}
+
+          {!loading && !error && trips.length > 0 && (
+            <div className="grid gap-4">
+              {trips.map((t) => (
+                <TripCard key={t.id} trip={t} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
