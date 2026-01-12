@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
-
+import { CreateTripPage } from "./pages/CreateTripPage";
 import { AuthPage } from "./pages/AuthPage";
 import { TripsPage } from "./pages/TripsPage";
 
@@ -27,6 +27,14 @@ export default function App() {
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />
+          <Route
+            path="/trips/new"
+            element={
+              <ProtectedRoute>
+                <CreateTripPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
