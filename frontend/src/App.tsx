@@ -5,6 +5,8 @@ import { CreateTripPage } from "./pages/CreateTripPage";
 import { AuthPage } from "./pages/AuthPage";
 import { TripsPage } from "./pages/TripsPage";
 import { TripDetailsPage } from "./pages/TripDetailsPage";
+import { RoleRoute } from "./auth/RoleRoute";
+import { ActivitiesPage } from "./pages/ActivitiesPage";
 
 function HomeRedirect() {
   const { token, loading } = useAuth();
@@ -41,6 +43,16 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <TripDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/activities"
+            element={
+              <ProtectedRoute>
+                <RoleRoute roles={["ADMIN", "EDITOR"]}>
+                  <ActivitiesPage />
+                </RoleRoute>
               </ProtectedRoute>
             }
           />

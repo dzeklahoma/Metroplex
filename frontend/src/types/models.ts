@@ -44,3 +44,12 @@ export type DayPlan = {
 export type TripDetails = Trip & {
   dayPlans: DayPlan[];
 };
+
+export type Activity = {
+  id: number;
+  destination: string;
+  name: string;
+  type: string;
+  priceLevel: number;
+  durationHours: number;
+};
