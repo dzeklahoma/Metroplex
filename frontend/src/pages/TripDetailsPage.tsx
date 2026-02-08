@@ -35,15 +35,16 @@ export function TripDetailsPage() {
 
   async function onRegenerate() {
     if (!trip) return;
+
+    if (regenerating) return; // extra guard
     setRegenerating(true);
+
     try {
-      const res = await tripsApi.regenerateTrip(trip.id);
-      setTrip(res.trip);
-      //console.log("TRIP DETAILS:", res.trip);
-      //console.log(
-      // "DAY 1 plannedActivities:",
-      // res.trip.dayPlans?.[0]?.plannedActivities
-      //);
+      await tripsApi.regenerateTrip(trip.id);
+
+      // IMPORTANT: always refetch the latest trip details after regenerate
+      const fresh = await tripsApi.getTripDetails(trip.id);
+      setTrip(fresh.trip);
     } catch (e: any) {
       alert(e?.message ?? "Regenerate failed");
     } finally {

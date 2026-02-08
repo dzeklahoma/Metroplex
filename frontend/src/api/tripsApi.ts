@@ -24,7 +24,7 @@ export function getTripDetails(id: number) {
 }
 
 export function regenerateTrip(id: number, interests?: string) {
-  return request<{ trip: TripDetails }>(`/api/trips/${id}/regenerate`, {
+  return request<{ ok: true }>(`/api/trips/${id}/regenerate`, {
     method: "POST",
     body: JSON.stringify(interests ? { interests } : {}),
   });
