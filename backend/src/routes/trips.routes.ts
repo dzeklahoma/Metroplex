@@ -12,6 +12,260 @@ type CreateTripBody = {
   interests?: string;
 };
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Trips
+ *     description: Trip creation, listing, details, deletion and regeneration
+ */
+
+/**
+ * @swagger
+ * /api/trips:
+ *   post:
+ *     tags: [Trips]
+ *     summary: Create a trip and generate itinerary
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateTripBody'
+ *     responses:
+ *       201:
+ *         description: Trip created with generated itinerary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 trip:
+ *                   type: object
+ *                 warning:
+ *                   type: string
+ *                   nullable: true
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/trips/my:
+ *   get:
+ *     tags: [Trips]
+ *     summary: Get my trips (summaries)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of trips for current user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 trips:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/TripSummary'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/trips/{id}:
+ *   get:
+ *     tags: [Trips]
+ *     summary: Get trip details (with day plans and activities)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Trip id
+ *     responses:
+ *       200:
+ *         description: Trip details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 trip:
+ *                   type: object
+ *       403:
+ *         description: Forbidden (trip not owned by user)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Trip not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *   delete:
+ *     tags: [Trips]
+ *     summary: Delete a trip (cascade delete day plans and planned activities)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Trip id
+ *     responses:
+ *       200:
+ *         description: Trip deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LogoutResponse'
+ *       403:
+ *         description: Forbidden (trip not owned by user)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Trip not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+
+/**
+ * @swagger
+ * /api/trips/{id}/regenerate:
+ *   post:
+ *     tags: [Trips]
+ *     summary: Regenerate itinerary for an existing trip (with lock)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Trip id
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegenerateBody'
+ *     responses:
+ *       200:
+ *         description: Regenerated itinerary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 trip:
+ *                   type: object
+ *                 warning:
+ *                   type: string
+ *                   nullable: true
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden (trip not owned by user)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Trip not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       409:
+ *         description: Regeneration already in progress
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+
 router.post(
   "/",
   requireAuth,
@@ -123,7 +377,7 @@ router.post(
       console.error(err);
       return res.status(500).json({ message: "Server error" });
     }
-  }
+  },
 );
 
 router.get("/my", requireAuth, async (req, res) => {
@@ -159,7 +413,7 @@ router.get("/my", requireAuth, async (req, res) => {
       summary: {
         totalPlannedActivities: t.dayPlans.reduce(
           (sum, dp) => sum + dp._count.plannedActivities,
-          0
+          0,
         ),
       },
     }));
@@ -412,7 +666,7 @@ router.post(
         // ignore unlock errors
       }
     }
-  }
+  },
 );
 
 export default router;
