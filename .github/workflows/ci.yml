@@ -1,0 +1,65 @@
+name: Metroplex CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: metroplex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/metroplex_test
+      JWT_SECRET: testsecret
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # BACKEND
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend deps
+        working-directory: ./backend
+        run: npm install
+
+      - name: Prisma migrate
+        working-directory: ./backend
+        run: npx prisma migrate deploy
+
+      - name: Build backend
+        working-directory: ./backend
+        run: npm run build
+
+      # FRONTEND
+      - name: Install frontend deps
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      # DOCKER CHECK
+      - name: Docker build
+        run: docker compose build
