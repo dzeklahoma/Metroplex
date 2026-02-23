@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
 
 type Mode = "login" | "register";
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function getErrorMessage(e: unknown, fallback: string) {
+  return e instanceof Error ? e.message : fallback;
 }
 
 export function AuthPage() {
@@ -33,7 +37,7 @@ export function AuthPage() {
 
   const canSubmit = !emailError && !passwordError && !submitting;
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
@@ -47,8 +51,8 @@ export function AuthPage() {
         await register(email.trim(), password);
       }
       navigate("/trips", { replace: true });
-    } catch (err: any) {
-      setError(err?.message ?? "Auth failed");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Auth failed"));
     } finally {
       setSubmitting(false);
     }
@@ -96,7 +100,9 @@ export function AuthPage() {
                 emailError ? "border-red-500" : "border-black/10"
               }`}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEmail(e.target.value)
+              }
               placeholder="you@example.com"
               autoComplete="email"
             />
@@ -113,7 +119,9 @@ export function AuthPage() {
                 passwordError ? "border-red-500" : "border-black/10"
               }`}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setPassword(e.target.value)
+              }
               placeholder="••••••••"
               autoComplete={
                 mode === "login" ? "current-password" : "new-password"
@@ -138,8 +146,8 @@ export function AuthPage() {
             {submitting
               ? "Please wait..."
               : mode === "login"
-              ? "Login"
-              : "Create account"}
+                ? "Login"
+                : "Create account"}
           </button>
         </form>
 
