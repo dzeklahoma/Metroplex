@@ -2,7 +2,13 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { generateItinerary } from "../services/planner.service.js";
-
+import {
+  Prisma,
+  Trip,
+  DayPlan,
+  PlannedActivity,
+  Activity,
+} from "@prisma/client";
 const router = Router();
 
 type CreateTripBody = {
@@ -317,57 +323,59 @@ router.post(
       });
 
       // 3) persist Trip + DayPlan + PlannedActivity in ONE transaction
-      const savedTrip = await prisma.$transaction(async (tx) => {
-        // create Trip inside tx
-        const createdTrip = await tx.trip.create({
-          data: {
-            userId,
-            destination,
-            daysCount: days,
-            budget: bud,
-            interests,
-          },
-        });
-
-        const dayPlans = [];
-
-        for (let d = 1; d <= days; d++) {
-          const dp = await tx.dayPlan.create({
-            data: { tripId: createdTrip.id, dayNumber: d },
+      const savedTrip = await prisma.$transaction(
+        async (tx: Prisma.TransactionClient) => {
+          // create Trip inside tx
+          const createdTrip = await tx.trip.create({
+            data: {
+              userId,
+              destination,
+              daysCount: days,
+              budget: bud,
+              interests,
+            },
           });
-          dayPlans.push(dp);
-        }
 
-        for (let d = 1; d <= days; d++) {
-          const dp = dayPlans[d - 1];
-          const dayItems = plan.days[d - 1] ?? [];
+          const dayPlans = [];
 
-          for (let i = 0; i < dayItems.length; i++) {
-            await tx.plannedActivity.create({
-              data: {
-                dayPlanId: dp.id,
-                activityId: dayItems[i].id,
-                orderIndex: i + 1,
-              },
+          for (let d = 1; d <= days; d++) {
+            const dp = await tx.dayPlan.create({
+              data: { tripId: createdTrip.id, dayNumber: d },
             });
+            dayPlans.push(dp);
           }
-        }
 
-        return tx.trip.findUnique({
-          where: { id: createdTrip.id },
-          include: {
-            dayPlans: {
-              orderBy: { dayNumber: "asc" },
-              include: {
-                plannedActivities: {
-                  orderBy: { orderIndex: "asc" },
-                  include: { activity: true },
+          for (let d = 1; d <= days; d++) {
+            const dp = dayPlans[d - 1];
+            const dayItems = plan.days[d - 1] ?? [];
+
+            for (let i = 0; i < dayItems.length; i++) {
+              await tx.plannedActivity.create({
+                data: {
+                  dayPlanId: dp.id,
+                  activityId: dayItems[i].id,
+                  orderIndex: i + 1,
+                },
+              });
+            }
+          }
+
+          return tx.trip.findUnique({
+            where: { id: createdTrip.id },
+            include: {
+              dayPlans: {
+                orderBy: { dayNumber: "asc" },
+                include: {
+                  plannedActivities: {
+                    orderBy: { orderIndex: "asc" },
+                    include: { activity: true },
+                  },
                 },
               },
             },
-          },
-        });
-      });
+          });
+        },
+      );
 
       return res.status(201).json({
         trip: savedTrip,
@@ -412,7 +420,7 @@ router.get("/my", requireAuth, async (req, res) => {
       createdAt: t.createdAt,
       summary: {
         totalPlannedActivities: t.dayPlans.reduce(
-          (sum, dp) => sum + dp._count.plannedActivities,
+          (sum: number, dp) => sum + dp._count.plannedActivities,
           0,
         ),
       },
@@ -575,7 +583,10 @@ router.post(
       const plan =
         activities.length === 0
           ? {
-              days: Array.from({ length: base.daysCount }, () => [] as any[]),
+              days: Array.from(
+                { length: base.daysCount },
+                () => [] as Activity[],
+              ),
               warning: "No activities found for destination",
             }
           : generateItinerary({
@@ -585,71 +596,73 @@ router.post(
             });
 
       // 5) Persist: delete old plan + optionally update interests + create new plan
-      const savedTrip = await prisma.$transaction(async (tx) => {
-        // Delete old planned activities + day plans
-        const existingDayPlans = await tx.dayPlan.findMany({
-          where: { tripId },
-          select: { id: true },
-        });
-
-        const dayPlanIds = existingDayPlans.map((dp) => dp.id);
-
-        if (dayPlanIds.length > 0) {
-          await tx.plannedActivity.deleteMany({
-            where: { dayPlanId: { in: dayPlanIds } },
+      const savedTrip = await prisma.$transaction(
+        async (tx: Prisma.TransactionClient) => {
+          // Delete old planned activities + day plans
+          const existingDayPlans = await tx.dayPlan.findMany({
+            where: { tripId },
+            select: { id: true },
           });
 
-          await tx.dayPlan.deleteMany({ where: { tripId } });
-        }
+          const dayPlanIds = existingDayPlans.map((dp) => dp.id);
 
-        // Update trip interests if overridden
-        if (effectiveInterests !== base.interests) {
-          await tx.trip.update({
-            where: { id: tripId },
-            data: { interests: effectiveInterests },
-          });
-        }
+          if (dayPlanIds.length > 0) {
+            await tx.plannedActivity.deleteMany({
+              where: { dayPlanId: { in: dayPlanIds } },
+            });
 
-        // Create new day plans
-        const newDayPlans = [];
-        for (let d = 1; d <= base.daysCount; d++) {
-          const dp = await tx.dayPlan.create({
-            data: { tripId, dayNumber: d },
-          });
-          newDayPlans.push(dp);
-        }
+            await tx.dayPlan.deleteMany({ where: { tripId } });
+          }
 
-        // Create planned activities (if plan is empty, this loop just does nothing)
-        for (let d = 1; d <= base.daysCount; d++) {
-          const dp = newDayPlans[d - 1];
-          const dayItems = plan.days[d - 1] ?? [];
-
-          for (let i = 0; i < dayItems.length; i++) {
-            await tx.plannedActivity.create({
-              data: {
-                dayPlanId: dp.id,
-                activityId: dayItems[i].id,
-                orderIndex: i + 1,
-              },
+          // Update trip interests if overridden
+          if (effectiveInterests !== base.interests) {
+            await tx.trip.update({
+              where: { id: tripId },
+              data: { interests: effectiveInterests },
             });
           }
-        }
 
-        return tx.trip.findUnique({
-          where: { id: tripId },
-          include: {
-            dayPlans: {
-              orderBy: { dayNumber: "asc" },
-              include: {
-                plannedActivities: {
-                  orderBy: { orderIndex: "asc" },
-                  include: { activity: true },
+          // Create new day plans
+          const newDayPlans = [];
+          for (let d = 1; d <= base.daysCount; d++) {
+            const dp = await tx.dayPlan.create({
+              data: { tripId, dayNumber: d },
+            });
+            newDayPlans.push(dp);
+          }
+
+          // Create planned activities (if plan is empty, this loop just does nothing)
+          for (let d = 1; d <= base.daysCount; d++) {
+            const dp = newDayPlans[d - 1];
+            const dayItems = plan.days[d - 1] ?? [];
+
+            for (let i = 0; i < dayItems.length; i++) {
+              await tx.plannedActivity.create({
+                data: {
+                  dayPlanId: dp.id,
+                  activityId: dayItems[i].id,
+                  orderIndex: i + 1,
+                },
+              });
+            }
+          }
+
+          return tx.trip.findUnique({
+            where: { id: tripId },
+            include: {
+              dayPlans: {
+                orderBy: { dayNumber: "asc" },
+                include: {
+                  plannedActivities: {
+                    orderBy: { orderIndex: "asc" },
+                    include: { activity: true },
+                  },
                 },
               },
             },
-          },
-        });
-      });
+          });
+        },
+      );
 
       return res.json({ trip: savedTrip, warning: plan.warning });
     } catch (err) {
