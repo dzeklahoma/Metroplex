@@ -4,6 +4,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon",
+    "lint": "echo \"lint placeholder\"",
+    "test": "echo \"tests placeholder\"",
     "build": "tsc",
     "start": "node dist/src/index.js",
     "generate:openapi": "node ./scripts/generate-openapi.js"

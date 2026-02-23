@@ -20,8 +20,9 @@ export function TripsPage() {
       try {
         const res = await tripsApi.getMyTrips();
         setTrips(res.trips);
-      } catch (e: any) {
-        setError(e?.message ?? "Failed to load trips");
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Failed to load trips";
+        setError(msg);
       } finally {
         setLoading(false);
       }

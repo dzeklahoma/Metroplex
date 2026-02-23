@@ -1,14 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import { Card } from "../components/Card";
 import * as tripsApi from "../api/tripsApi";
 import type { TripDetails } from "../types/models";
 
+function getErrorMessage(e: unknown, fallback: string) {
+  return e instanceof Error ? e.message : fallback;
+}
+
 export function TripDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const tripId = Number(id);
+
+  const tripId = useMemo(() => {
+    const n = Number(id);
+    return Number.isFinite(n) ? n : NaN;
+  }, [id]);
 
   const [trip, setTrip] = useState<TripDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -17,7 +25,7 @@ export function TripDetailsPage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (!tripId) return;
+    if (!Number.isFinite(tripId)) return;
 
     (async () => {
       setError(null);
@@ -25,8 +33,8 @@ export function TripDetailsPage() {
       try {
         const res = await tripsApi.getTripDetails(tripId);
         setTrip(res.trip);
-      } catch (e: any) {
-        setError(e?.message ?? "Failed to load trip");
+      } catch (e: unknown) {
+        setError(getErrorMessage(e, "Failed to load trip"));
       } finally {
         setLoading(false);
       }
@@ -35,18 +43,17 @@ export function TripDetailsPage() {
 
   async function onRegenerate() {
     if (!trip) return;
-
     if (regenerating) return; // extra guard
-    setRegenerating(true);
 
+    setRegenerating(true);
     try {
       await tripsApi.regenerateTrip(trip.id);
 
       // IMPORTANT: always refetch the latest trip details after regenerate
       const fresh = await tripsApi.getTripDetails(trip.id);
       setTrip(fresh.trip);
-    } catch (e: any) {
-      alert(e?.message ?? "Regenerate failed");
+    } catch (e: unknown) {
+      alert(getErrorMessage(e, "Regenerate failed"));
     } finally {
       setRegenerating(false);
     }
@@ -60,8 +67,8 @@ export function TripDetailsPage() {
     try {
       await tripsApi.deleteTrip(trip.id);
       navigate("/trips", { replace: true });
-    } catch (e: any) {
-      alert(e?.message ?? "Delete failed");
+    } catch (e: unknown) {
+      alert(getErrorMessage(e, "Delete failed"));
       setDeleting(false);
     }
   }
@@ -78,6 +85,10 @@ export function TripDetailsPage() {
             <Card className="border-red-200 bg-red-50 text-red-700">
               {error}
             </Card>
+          )}
+
+          {!loading && !error && !trip && Number.isFinite(tripId) && (
+            <Card>Trip not found.</Card>
           )}
 
           {!loading && !error && trip && (
