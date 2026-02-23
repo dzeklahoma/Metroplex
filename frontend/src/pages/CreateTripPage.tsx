@@ -1,7 +1,11 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import * as tripsApi from "../api/tripsApi";
+
+function getErrorMessage(e: unknown, fallback: string) {
+  return e instanceof Error ? e.message : fallback;
+}
 
 export function CreateTripPage() {
   const navigate = useNavigate();
@@ -33,7 +37,7 @@ export function CreateTripPage() {
   const canSubmit =
     !destinationError && !daysError && !interestsError && !submitting;
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     if (!canSubmit) return;
@@ -46,19 +50,20 @@ export function CreateTripPage() {
         interests: interests.trim(),
       };
 
-      const budgetNum = budget.trim() ? Number(budget) : undefined;
-      if (budget.trim() && !Number.isFinite(budgetNum)) {
-        setError("Budget must be a number");
-        setSubmitting(false);
-        return;
+      const rawBudget = budget.trim();
+      if (rawBudget) {
+        const budgetNum = Number(rawBudget);
+        if (!Number.isFinite(budgetNum)) {
+          setError("Budget must be a number");
+          return;
+        }
+        payload.budget = budgetNum;
       }
-      if (budgetNum !== undefined) payload.budget = budgetNum;
 
       const res = await tripsApi.createTrip(payload);
-      // ako backend vraća { trip: { id } }
       navigate(`/trips/${res.trip.id}`, { replace: true });
-    } catch (err: any) {
-      setError(err?.message ?? "Create trip failed");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Create trip failed"));
     } finally {
       setSubmitting(false);
     }
@@ -86,7 +91,9 @@ export function CreateTripPage() {
                   destinationError ? "border-red-500" : "border-black/10"
                 }`}
                 value={destination}
-                onChange={(e) => setDestination(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setDestination(e.target.value)
+                }
                 placeholder="e.g. Rome"
               />
               {destination && destinationError && (
@@ -104,7 +111,9 @@ export function CreateTripPage() {
                   daysError ? "border-red-500" : "border-black/10"
                 }`}
                 value={daysCount}
-                onChange={(e) => setDaysCount(Number(e.target.value))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setDaysCount(Number(e.target.value))
+                }
                 min={1}
                 max={30}
               />
@@ -118,7 +127,9 @@ export function CreateTripPage() {
               <input
                 className="mt-1 w-full rounded-xl border border-black/10 p-2 outline-none"
                 value={budget}
-                onChange={(e) => setBudget(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setBudget(e.target.value)
+                }
                 placeholder="e.g. 500"
               />
             </div>
@@ -131,7 +142,9 @@ export function CreateTripPage() {
                 }`}
                 rows={4}
                 value={interests}
-                onChange={(e) => setInterests(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setInterests(e.target.value)
+                }
                 placeholder="e.g. museums, food, nature, nightlife"
               />
               {interests && interestsError && (

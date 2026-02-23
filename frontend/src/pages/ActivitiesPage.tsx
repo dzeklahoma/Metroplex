@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Navbar } from "../components/Navbar";
 import { Card } from "../components/Card";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
 import type { Activity } from "../types/models";
 import * as activitiesApi from "../api/activitiesApi";
 
@@ -20,6 +20,10 @@ const emptyForm: FormState = {
   priceLevel: null,
   durationHours: null,
 };
+
+function getErrorMessage(e: unknown, fallback: string) {
+  return e instanceof Error ? e.message : fallback;
+}
 
 export function ActivitiesPage() {
   const { user } = useAuth();
@@ -46,8 +50,8 @@ export function ActivitiesPage() {
       try {
         const res = await activitiesApi.listActivities();
         setActivities(res.activities);
-      } catch (e: any) {
-        setError(e?.message ?? "Failed to load activities");
+      } catch (e: unknown) {
+        setError(getErrorMessage(e, "Failed to load activities"));
       } finally {
         setLoading(false);
       }
@@ -94,6 +98,7 @@ export function ActivitiesPage() {
       alert("Destination, name and type are required.");
       return;
     }
+
     if (
       form.priceLevel === null ||
       !Number.isInteger(form.priceLevel) ||
@@ -125,8 +130,8 @@ export function ActivitiesPage() {
         );
         startCreate();
       }
-    } catch (e: any) {
-      alert(e?.message ?? "Save failed");
+    } catch (e: unknown) {
+      alert(getErrorMessage(e, "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -139,8 +144,8 @@ export function ActivitiesPage() {
     try {
       await activitiesApi.deleteActivity(id);
       setActivities((prev) => prev.filter((x) => x.id !== id));
-    } catch (e: any) {
-      alert(e?.message ?? "Delete failed");
+    } catch (e: unknown) {
+      alert(getErrorMessage(e, "Delete failed"));
     }
   }
 
@@ -172,13 +177,17 @@ export function ActivitiesPage() {
               className="rounded-xl border border-black/10 p-2 outline-none"
               placeholder="Filter by destination..."
               value={qDestination}
-              onChange={(e) => setQDestination(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setQDestination(e.target.value)
+              }
             />
             <input
               className="rounded-xl border border-black/10 p-2 outline-none"
               placeholder="Filter by type..."
               value={qType}
-              onChange={(e) => setQType(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setQType(e.target.value)
+              }
             />
           </div>
 
@@ -205,7 +214,7 @@ export function ActivitiesPage() {
                 className="rounded-xl border border-black/10 p-2 outline-none"
                 placeholder="Destination"
                 value={form.destination}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setForm((p) => ({ ...p, destination: e.target.value }))
                 }
               />
@@ -213,7 +222,7 @@ export function ActivitiesPage() {
                 className="rounded-xl border border-black/10 p-2 outline-none"
                 placeholder="Type (e.g. museum)"
                 value={form.type}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setForm((p) => ({ ...p, type: e.target.value }))
                 }
               />
@@ -221,7 +230,7 @@ export function ActivitiesPage() {
                 className="rounded-xl border border-black/10 p-2 outline-none sm:col-span-2"
                 placeholder="Name"
                 value={form.name}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setForm((p) => ({ ...p, name: e.target.value }))
                 }
               />
@@ -233,7 +242,7 @@ export function ActivitiesPage() {
                 className="rounded-xl border border-black/10 p-2 outline-none"
                 placeholder="Price level (1-5)"
                 value={form.priceLevel ?? ""}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setForm((p) => ({
                     ...p,
                     priceLevel:
@@ -247,7 +256,7 @@ export function ActivitiesPage() {
                 className="rounded-xl border border-black/10 p-2 outline-none"
                 placeholder="Duration hours"
                 value={form.durationHours ?? ""}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setForm((p) => ({
                     ...p,
                     durationHours:

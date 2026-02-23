@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { AuthProvider } from "./auth/AuthProvider";
+import { useAuth } from "./auth/useAuth";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { CreateTripPage } from "./pages/CreateTripPage";
 import { AuthPage } from "./pages/AuthPage";
