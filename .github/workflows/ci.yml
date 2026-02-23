@@ -2,7 +2,7 @@ name: Metroplex CI
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, "feature/**"]
   pull_request:
     branches: [develop, main]
 
@@ -58,12 +58,18 @@ jobs:
       # FRONTEND
       - name: Install frontend deps
         working-directory: ./frontend
-        run: npm install
+        run: npm ci
 
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
+      - name: Lint frontend
+        working-directory: ./frontend
+        run: npm run lint
 
+      - name: Test frontend
+        working-directory: ./frontend
+        run: npm run test
       # DOCKER CHECK
       - name: Docker build
         run: docker compose build
