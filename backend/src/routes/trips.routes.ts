@@ -2,13 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { generateItinerary } from "../services/planner.service.js";
-import {
-  Prisma,
-  Trip,
-  DayPlan,
-  PlannedActivity,
-  Activity,
-} from "@prisma/client";
+import { Prisma, Activity } from "@prisma/client";
 const router = Router();
 
 type CreateTripBody = {
