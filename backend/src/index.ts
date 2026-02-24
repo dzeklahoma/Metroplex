@@ -1,29 +1,7 @@
-import "dotenv/config";
-import express, { Request, Response } from "express";
-import cors from "cors";
-
-import authRoutes from "./routes/auth.routes.js";
-import tripsRoutes from "./routes/trips.routes.js";
-import activitiesRoutes from "./routes/activities.routes.js";
-
-import swaggerUi from "swagger-ui-express";
-import { swaggerSpec } from "./config/swagger";
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "Metroplex API", health: "/health" });
-});
-
-app.get("/health", (req: Request, res: Response) => {
-  res.json({ status: "ok" });
-});
-
-app.use("/api/auth", authRoutes);
-app.use("/api/trips", tripsRoutes);
-app.use("/api/activities", activitiesRoutes);
-app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+import { app } from "./app";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
-app.listen(PORT, () => console.log(`API running on ${PORT}`));
+
+app.listen(PORT, () => {
+  console.log(`API running on ${PORT}`);
+});
