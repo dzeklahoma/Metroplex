@@ -3,6 +3,8 @@ import { prisma } from "../prisma";
 import { requireAuth } from "../middleware/requireAuth";
 import { generateItinerary } from "../services/planner.service";
 import { Prisma, Activity } from "@prisma/client";
+import { createTripSchema } from "../validation/trips.schemas";
+
 const router = Router();
 
 type CreateTripBody = {
@@ -271,35 +273,17 @@ router.post(
   requireAuth,
   async (req: Request<{}, {}, CreateTripBody>, res: Response) => {
     try {
-      const { destination, daysCount, budget, interests } = req.body;
-
-      if (!destination || typeof destination !== "string") {
-        return res.status(400).json({ message: "destination is required" });
-      }
-
-      const days = Number(daysCount);
-      if (!Number.isInteger(days) || days < 1 || days > 30) {
+      const parsed = createTripSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res
           .status(400)
-          .json({ message: "daysCount must be integer 1-30" });
+          .json({ message: parsed.error.issues[0].message });
       }
 
-      let bud: number | null = null;
-      if (budget !== undefined && budget !== null && budget !== "") {
-        const parsed = Number(budget);
-        if (Number.isNaN(parsed) || parsed < 0) {
-          return res
-            .status(400)
-            .json({ message: "budget must be a number >= 0" });
-        }
-        bud = parsed;
-      }
+      const { destination, daysCount, budget, interests } = parsed.data;
 
-      if (!interests || typeof interests !== "string") {
-        return res
-          .status(400)
-          .json({ message: "interests is required (comma-separated)" });
-      }
+      const days = daysCount;
+      const bud = budget;
 
       const userId = req.user?.userId;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });

@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../prisma";
 import { requireAuth } from "../middleware/requireAuth";
 import { hashToken } from "../utils/tokenHash";
-
+import { loginSchema, registerSchema } from "../validation/auth.schemas";
 /**
  * @swagger
  * tags:
@@ -171,19 +171,14 @@ router.post(
   "/register",
   async (req: Request<{}, {}, RegisterBody>, res: Response) => {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
+      const parsed = registerSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res
           .status(400)
-          .json({ message: "Email and password are required." });
+          .json({ message: parsed.error.issues[0].message });
       }
 
-      if (password.length < 6) {
-        return res
-          .status(400)
-          .json({ message: "Password must be at least 6 characters." });
-      }
+      const { email, password } = parsed.data;
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
@@ -210,13 +205,14 @@ router.post(
   "/login",
   async (req: Request<{}, {}, LoginBody>, res: Response) => {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
+      const parsed = loginSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res
           .status(400)
-          .json({ message: "Email and password are required." });
+          .json({ message: parsed.error.issues[0].message });
       }
+
+      const { email, password } = parsed.data;
 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user)
