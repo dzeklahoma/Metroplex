@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci --no-audit --no-fund
 
 COPY . .
 RUN npx prisma generate
@@ -15,7 +15,7 @@ WORKDIR /app
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev --no-audit --no-fund
 
 # copy prisma client engine + generated client
 COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
