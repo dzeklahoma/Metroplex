@@ -26,9 +26,11 @@ jobs:
           --health-retries=5
 
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/metroplex_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/metroplex_test?schema=public
       JWT_SECRET: testsecret
       NODE_ENV: test
+      PORT: 0
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -48,9 +50,18 @@ jobs:
         working-directory: ./backend
         run: npx prisma generate
 
-      - name: Prisma migrate
+      # clean test DB schema each run (best for CI)
+      - name: Prisma migrate reset (test DB)
         working-directory: ./backend
-        run: npx prisma migrate deploy
+        run: npx prisma migrate reset --force
+
+      - name: Run backend unit tests
+        working-directory: ./backend
+        run: npm test
+
+      - name: Run backend integration tests
+        working-directory: ./backend
+        run: npx jest --runInBand --testMatch "<rootDir>/src/__tests__/integration/**/*.test.ts"
 
       - name: Build backend
         working-directory: ./backend
@@ -64,6 +75,7 @@ jobs:
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
+
       - name: Lint frontend
         working-directory: ./frontend
         run: npm run lint
@@ -71,6 +83,7 @@ jobs:
       - name: Test frontend
         working-directory: ./frontend
         run: npm run test
+
       # DOCKER CHECK
       - name: Docker build
         run: docker compose build
