@@ -1,9 +1,9 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { prisma } from "../prisma.js";
-import { requireAuth } from "../middleware/requireAuth.js";
-import { hashToken } from "../utils/tokenHash.js";
+import { prisma } from "../prisma";
+import { requireAuth } from "../middleware/requireAuth";
+import { hashToken } from "../utils/tokenHash";
 
 /**
  * @swagger

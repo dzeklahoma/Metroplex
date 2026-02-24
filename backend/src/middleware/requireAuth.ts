@@ -1,8 +1,8 @@
 // backend/src/middleware/requireAuth.js
 import { Request, Response, NextFunction } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
-import { prisma } from "../prisma.js";
-import { hashToken } from "../utils/tokenHash.js";
+import { prisma } from "../prisma";
+import { hashToken } from "../utils/tokenHash";
 
 export interface AuthPayload extends JwtPayload {
   userId: number;
@@ -21,7 +21,7 @@ declare global {
 export async function requireAuth(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const header = req.headers.authorization;
