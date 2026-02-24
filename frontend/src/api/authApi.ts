@@ -2,25 +2,25 @@ import { request } from "./http";
 import type { AuthResponse, User } from "../types/models";
 
 export function login(email: string, password: string) {
-  return request<AuthResponse>("/api/auth/login", {
+  return request<AuthResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
 }
 
 export function register(email: string, password: string) {
-  return request<User>("/api/auth/register", {
+  return request<User>("/auth/register", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
 }
 
 export function me() {
-  return request<{ user: User }>("/api/auth/me");
+  return request<{ user: User }>("/auth/me");
 }
 
 export function logout() {
-  return request<{ message: string }>("/api/auth/logout", {
+  return request<{ message: string }>("/auth/logout", {
     method: "POST",
   });
 }
