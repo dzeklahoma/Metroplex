@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
-import { prisma } from "../prisma.js";
-import { requireAuth } from "../middleware/requireAuth.js";
-import { generateItinerary } from "../services/planner.service.js";
+import { prisma } from "../prisma";
+import { requireAuth } from "../middleware/requireAuth";
+import { generateItinerary } from "../services/planner.service";
 import { Prisma, Activity } from "@prisma/client";
 const router = Router();
 

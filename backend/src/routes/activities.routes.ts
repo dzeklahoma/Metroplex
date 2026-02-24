@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
-import { prisma } from "../prisma.js";
-import { requireAuth } from "../middleware/requireAuth.js";
-import { requireRole } from "../middleware/requireRole.js";
+import { prisma } from "../prisma";
+import { requireAuth } from "../middleware/requireAuth";
+import { requireRole } from "../middleware/requireRole";
 
 /**
  * @swagger
