@@ -96,4 +96,31 @@ describe("generateItinerary (unit)", () => {
     // Because MAX_PER_DAY=3, with 9 activities and 3 days -> each day should end up with 3
     expect(res.days.map((d) => d.length)).toEqual([3, 3, 3]);
   });
+  test("prefers activities whose type matches interests (interest scoring)", () => {
+    const activities: Activity[] = [
+      makeActivity(1, {
+        type: "culture museum",
+        priceLevel: 5,
+        durationHours: 2,
+      }),
+      makeActivity(2, { type: "nature park", priceLevel: 5, durationHours: 2 }),
+      makeActivity(3, { type: "food market", priceLevel: 5, durationHours: 2 }),
+    ];
+
+    const resCulture = generateItinerary({
+      activities,
+      daysCount: 1,
+      interests: "culture",
+    });
+
+    const resNature = generateItinerary({
+      activities,
+      daysCount: 1,
+      interests: "nature",
+    });
+
+    // 1 day => max 3 items, order matters (ranked list is pushed in order)
+    expect(resCulture.days[0][0].type?.toLowerCase()).toContain("culture");
+    expect(resNature.days[0][0].type?.toLowerCase()).toContain("nature");
+  });
 });
