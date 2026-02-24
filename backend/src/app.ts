@@ -68,3 +68,14 @@ app.use("/api/auth", authRoutes);
 app.use("/api/trips", tripsRoutes);
 app.use("/api/activities", activitiesRoutes);
 app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use((err: any, _req: Request, res: Response, _next: any) => {
+  console.error(err);
+
+  const status = err.status || 500;
+  const message =
+    process.env.NODE_ENV === "production"
+      ? "Internal Server Error"
+      : err.message || "Internal Server Error";
+
+  res.status(status).json({ message });
+});
