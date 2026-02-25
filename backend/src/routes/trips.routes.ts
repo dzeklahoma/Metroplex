@@ -3,11 +3,16 @@ import { prisma } from "../prisma";
 import { requireAuth } from "../middleware/requireAuth";
 import { generateItinerary } from "../services/planner.service";
 import { Prisma, Activity } from "@prisma/client";
+import { createTripSchema } from "../validation/trips.schemas";
+import { geocodeDestination } from "../services/geocoding.service";
+import { getDailyForecast } from "../services/weather.service";
+
 const router = Router();
 
 type CreateTripBody = {
   destination?: string;
   daysCount?: number | string;
+  startDate?: string;
   budget?: number | string;
   interests?: string;
 };
@@ -271,40 +276,41 @@ router.post(
   requireAuth,
   async (req: Request<{}, {}, CreateTripBody>, res: Response) => {
     try {
-      const { destination, daysCount, budget, interests } = req.body;
-
-      if (!destination || typeof destination !== "string") {
-        return res.status(400).json({ message: "destination is required" });
-      }
-
-      const days = Number(daysCount);
-      if (!Number.isInteger(days) || days < 1 || days > 30) {
+      const parsed = createTripSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res
           .status(400)
-          .json({ message: "daysCount must be integer 1-30" });
+          .json({ message: parsed.error.issues[0].message });
       }
 
-      let bud: number | null = null;
-      if (budget !== undefined && budget !== null && budget !== "") {
-        const parsed = Number(budget);
-        if (Number.isNaN(parsed) || parsed < 0) {
-          return res
-            .status(400)
-            .json({ message: "budget must be a number >= 0" });
-        }
-        bud = parsed;
-      }
+      const {
+        destination,
+        daysCount,
+        budget,
+        interests,
+        startDate: startDateStr,
+      } = parsed.data;
 
-      if (!interests || typeof interests !== "string") {
-        return res
-          .status(400)
-          .json({ message: "interests is required (comma-separated)" });
-      }
+      const days = daysCount;
+      const bud = budget;
 
       const userId = req.user?.userId;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-      // 1) fetch activities for destination (van transakcije je OK)
+      const startDate = new Date(`${startDateStr}T00:00:00.000Z`);
+      const startIso = startDate.toISOString().slice(0, 10);
+
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + days - 1);
+      const endIso = endDate.toISOString().slice(0, 10);
+
+      const geo = await geocodeDestination(destination);
+
+      const weatherByDay = geo
+        ? await getDailyForecast(geo.lat, geo.lng, startIso, endIso)
+        : [];
+
+      // 1) fetch activities for destination
       const activities = await prisma.activity.findMany({
         where: { destination },
       });
@@ -314,12 +320,13 @@ router.post(
         activities,
         daysCount: days,
         interests,
+        startDate,
+        weatherByDay,
       });
 
       // 3) persist Trip + DayPlan + PlannedActivity in ONE transaction
       const savedTrip = await prisma.$transaction(
         async (tx: Prisma.TransactionClient) => {
-          // create Trip inside tx
           const createdTrip = await tx.trip.create({
             data: {
               userId,
@@ -327,6 +334,12 @@ router.post(
               daysCount: days,
               budget: bud,
               interests,
+              startDate,
+              destinationLat: geo?.lat,
+              destinationLng: geo?.lng,
+              ...(weatherByDay.length
+                ? { weatherDailyJson: weatherByDay as any }
+                : {}),
             },
           });
 
@@ -526,6 +539,10 @@ router.post(
           daysCount: true,
           interests: true,
           regenLockUntil: true,
+          startDate: true,
+          destinationLat: true,
+          destinationLng: true,
+          weatherDailyJson: true,
         },
       });
 
@@ -573,7 +590,30 @@ router.post(
       const activities = await prisma.activity.findMany({
         where: { destination: base.destination },
       });
+      const startIso = base.startDate.toISOString().slice(0, 10);
+      const endDate = new Date(base.startDate);
+      endDate.setDate(base.startDate.getDate() + base.daysCount - 1);
+      const endIso = endDate.toISOString().slice(0, 10);
 
+      // Prefer cached weather; refresh only if we have coords and trip hasn't started yet
+      let weatherByDay: any[] = Array.isArray(base.weatherDailyJson)
+        ? (base.weatherDailyJson as any[])
+        : [];
+
+      const tripNotStartedYet = base.startDate > now;
+
+      if (
+        tripNotStartedYet &&
+        typeof base.destinationLat === "number" &&
+        typeof base.destinationLng === "number"
+      ) {
+        weatherByDay = await getDailyForecast(
+          base.destinationLat,
+          base.destinationLng,
+          startIso,
+          endIso,
+        );
+      }
       const plan =
         activities.length === 0
           ? {
@@ -587,6 +627,8 @@ router.post(
               activities,
               daysCount: base.daysCount,
               interests: effectiveInterests,
+              startDate: base.startDate,
+              weatherByDay,
             });
 
       // 5) Persist: delete old plan + optionally update interests + create new plan
@@ -615,7 +657,17 @@ router.post(
               data: { interests: effectiveInterests },
             });
           }
-
+          // If we refreshed weather (future trip + coords available), store latest cache
+          if (tripNotStartedYet) {
+            await tx.trip.update({
+              where: { id: tripId },
+              data: {
+                ...(weatherByDay.length
+                  ? { weatherDailyJson: weatherByDay as any }
+                  : {}),
+              },
+            });
+          }
           // Create new day plans
           const newDayPlans = [];
           for (let d = 1; d <= base.daysCount; d++) {

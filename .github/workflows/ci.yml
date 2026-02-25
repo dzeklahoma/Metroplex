@@ -30,6 +30,7 @@ jobs:
       JWT_SECRET: testsecret
       NODE_ENV: test
       PORT: 0
+      PRISMA_MIGRATE_SKIP_SEED: "true"
 
     steps:
       - name: Checkout repo
@@ -47,20 +48,20 @@ jobs:
 
       - name: Prisma generate
         working-directory: ./backend
-        run: npx prisma generate
+        run: npx prisma generate --schema prisma/schema.prisma
 
-      # clean test DB schema each run (best for CI)
-      - name: Prisma migrate reset (test DB)
-        working-directory: ./backend
-        run: npx prisma migrate reset --force
+      - name: Reset test DB schema
+        run: |
+          docker exec -i $(docker ps -q --filter "ancestor=postgres:15" | head -n 1) \
+            psql -U postgres -d metroplex_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
 
-      - name: Run backend unit tests
+      - name: Apply migrations (test DB)
         working-directory: ./backend
-        run: npm test
+        run: npx prisma migrate deploy --schema prisma/schema.prisma
 
-      - name: Run backend integration tests
+      - name: Run backend tests
         working-directory: ./backend
-        run: npx jest --runInBand --testMatch "<rootDir>/src/__tests__/integration/**/*.test.ts"
+        run: npm run test:ci
 
       - name: Build backend
         working-directory: ./backend
