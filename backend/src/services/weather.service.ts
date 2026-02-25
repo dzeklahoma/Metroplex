@@ -12,6 +12,12 @@ export async function getDailyForecast(
   startDateIso: string, // YYYY-MM-DD
   endDateIso: string, // YYYY-MM-DD
 ): Promise<DayWeather[]> {
+  if (
+    process.env.NODE_ENV === "test" ||
+    process.env.DISABLE_EXTERNAL_APIS === "1"
+  ) {
+    return [];
+  }
   const url = new URL(OPEN_METEO_URL);
   url.searchParams.set("latitude", String(lat));
   url.searchParams.set("longitude", String(lng));

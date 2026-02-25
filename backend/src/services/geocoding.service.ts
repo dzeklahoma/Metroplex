@@ -18,6 +18,12 @@ export type GeocodeResult = { lat: number; lng: number };
 export async function geocodeDestination(
   destination: string,
 ): Promise<GeocodeResult | null> {
+  if (
+    process.env.NODE_ENV === "test" ||
+    process.env.DISABLE_EXTERNAL_APIS === "1"
+  ) {
+    return null;
+  }
   await throttle1rps();
 
   const url = new URL(NOMINATIM_URL);
