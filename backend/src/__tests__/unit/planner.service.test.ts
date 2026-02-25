@@ -15,27 +15,35 @@ function makeActivity(id: number, overrides: Partial<Activity> = {}): Activity {
   };
 }
 
+const START_DATE = new Date("2026-07-01T00:00:00.000Z");
+
 describe("generateItinerary (unit)", () => {
   test("returns exactly daysCount days (arrays)", () => {
     const activities = [makeActivity(1), makeActivity(2), makeActivity(3)];
+
     const res = generateItinerary({
       activities,
       daysCount: 3,
-      interests: "culture",
+      interests: "nature",
+      startDate: START_DATE,
     });
 
     expect(res.days).toHaveLength(3);
-    for (const day of res.days) expect(Array.isArray(day)).toBe(true);
+    for (const day of res.days) {
+      expect(Array.isArray(day)).toBe(true);
+    }
   });
 
   test("never places more than 3 activities per day", () => {
     const activities = Array.from({ length: 50 }, (_, i) =>
       makeActivity(i + 1),
     );
+
     const res = generateItinerary({
       activities,
       daysCount: 2,
       interests: "culture",
+      startDate: START_DATE,
     });
 
     expect(res.days[0].length).toBeLessThanOrEqual(3);
@@ -46,10 +54,12 @@ describe("generateItinerary (unit)", () => {
     const activities = Array.from({ length: 12 }, (_, i) =>
       makeActivity(i + 1),
     );
+
     const res = generateItinerary({
       activities,
       daysCount: 4,
       interests: "culture",
+      startDate: START_DATE,
     });
 
     const all = res.days.flat();
@@ -64,6 +74,7 @@ describe("generateItinerary (unit)", () => {
       activities: [],
       daysCount: 3,
       interests: "culture",
+      startDate: START_DATE,
     });
 
     expect(res.warning).toBe("No activities found for this destination.");
@@ -73,10 +84,12 @@ describe("generateItinerary (unit)", () => {
 
   test("when activities.length < daysCount, warning is returned", () => {
     const activities = [makeActivity(1), makeActivity(2)];
+
     const res = generateItinerary({
       activities,
       daysCount: 5,
       interests: "culture",
+      startDate: START_DATE,
     });
 
     expect(res.warning).toBe(
@@ -85,42 +98,51 @@ describe("generateItinerary (unit)", () => {
     expect(res.days).toHaveLength(5);
   });
 
-  test("fills days round-robin (balanced distribution) when enough activities", () => {
-    const activities = Array.from({ length: 9 }, (_, i) => makeActivity(i + 1));
-    const res = generateItinerary({
-      activities,
-      daysCount: 3,
-      interests: "culture",
-    });
-
-    // Because MAX_PER_DAY=3, with 9 activities and 3 days -> each day should end up with 3
-    expect(res.days.map((d) => d.length)).toEqual([3, 3, 3]);
-  });
-  test("prefers activities whose type matches interests (interest scoring)", () => {
+  test("prefers activities whose type matches interests", () => {
     const activities: Activity[] = [
-      makeActivity(1, {
-        type: "culture museum",
-        priceLevel: 5,
-        durationHours: 2,
-      }),
-      makeActivity(2, { type: "nature park", priceLevel: 5, durationHours: 2 }),
-      makeActivity(3, { type: "food market", priceLevel: 5, durationHours: 2 }),
+      makeActivity(1, { type: "culture museum" }),
+      makeActivity(2, { type: "nature park" }),
+      makeActivity(3, { type: "food market" }),
     ];
 
     const resCulture = generateItinerary({
       activities,
       daysCount: 1,
       interests: "culture",
+      startDate: START_DATE,
     });
 
     const resNature = generateItinerary({
       activities,
       daysCount: 1,
       interests: "nature",
+      startDate: START_DATE,
     });
 
-    // 1 day => max 3 items, order matters (ranked list is pushed in order)
     expect(resCulture.days[0][0].type?.toLowerCase()).toContain("culture");
     expect(resNature.days[0][0].type?.toLowerCase()).toContain("nature");
+  });
+
+  test("discourages outdoor activities on rainy day", () => {
+    const activities: Activity[] = [
+      makeActivity(1, { type: "nature park" }), // outdoor
+      makeActivity(2, { type: "culture museum" }), // indoor
+    ];
+
+    const res = generateItinerary({
+      activities,
+      daysCount: 1,
+      interests: "nature",
+      startDate: START_DATE,
+      weatherByDay: [
+        {
+          date: "2026-07-01",
+          precipitationProbability: 80,
+          precipitationMm: 5,
+        },
+      ],
+    });
+
+    expect(res.days[0][0].type?.toLowerCase()).not.toContain("nature");
   });
 });

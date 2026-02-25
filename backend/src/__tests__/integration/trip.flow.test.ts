@@ -2,6 +2,22 @@ import request from "supertest";
 import { app } from "../../app";
 import { prisma } from "../../prisma";
 
+// 🔥 Mock external APIs
+jest.mock("../../services/geocoding.service", () => ({
+  geocodeDestination: jest.fn(async () => ({
+    lat: 48.8566,
+    lng: 2.3522,
+  })),
+}));
+
+jest.mock("../../services/weather.service", () => ({
+  getDailyForecast: jest.fn(async () => [
+    { date: "2026-07-01", precipitationProbability: 10, precipitationMm: 0 },
+    { date: "2026-07-02", precipitationProbability: 80, precipitationMm: 5 },
+    { date: "2026-07-03", precipitationProbability: 20, precipitationMm: 0 },
+  ]),
+}));
+
 function uniqEmail() {
   return `trip_${Date.now()}_${Math.floor(Math.random() * 1e6)}@test.com`;
 }
@@ -11,7 +27,6 @@ describe("integration: trip flow", () => {
   let tripId: number;
 
   beforeAll(async () => {
-    // Seed a few activities so itinerary is not empty
     await prisma.activity.createMany({
       data: [
         {
@@ -67,10 +82,10 @@ describe("integration: trip flow", () => {
         daysCount: 3,
         interests: "culture",
         budget: 1000,
+        startDate: "2026-07-01",
       });
 
     expect(res.status).toBe(201);
-    expect(res.body).toHaveProperty("trip");
     expect(res.body.trip).toHaveProperty("id");
 
     tripId = res.body.trip.id;
@@ -82,10 +97,7 @@ describe("integration: trip flow", () => {
       0,
     );
 
-    // With 3 seeded activities and MAX_PER_DAY=3, we should plan at least 1 activity.
     expect(totalPlanned).toBeGreaterThan(0);
-
-    // No warning expected now
     expect(res.body.warning).toBeNull();
   });
 
@@ -96,13 +108,13 @@ describe("integration: trip flow", () => {
       .send({ interests: "nature" });
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("trip");
     expect(res.body.trip.dayPlans).toHaveLength(3);
 
     const totalPlanned = res.body.trip.dayPlans.reduce(
       (sum: number, dp: any) => sum + (dp.plannedActivities?.length ?? 0),
       0,
     );
+
     expect(totalPlanned).toBeGreaterThan(0);
   });
 

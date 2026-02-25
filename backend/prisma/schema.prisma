@@ -24,7 +24,10 @@ model Trip {
   budget      Float?
   interests   String
   createdAt   DateTime @default(now())
-
+  startDate        DateTime
+  destinationLat   Float?
+  destinationLng   Float?
+  weatherDailyJson Json?
   regenLockUntil DateTime? // prevents double-click regen; auto-expires
   
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)

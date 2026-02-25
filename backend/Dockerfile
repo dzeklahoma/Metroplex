@@ -10,19 +10,29 @@ RUN npx prisma generate
 RUN npm run build
 
 # ---------- PRODUCTION STAGE ----------
-FROM node:20-alpine
+FROM node:20-alpine AS prod
 WORKDIR /app
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 COPY package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-# copy prisma client engine + generated client
 COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
-
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 EXPOSE 3001
 CMD ["node", "dist/src/index.js"]
+
+# ---------- TEST STAGE (dev deps included) ----------
+FROM node:20-alpine AS test
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+RUN npx prisma generate
+
+CMD ["npm", "test"]

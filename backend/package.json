@@ -5,14 +5,15 @@
   "scripts": {
     "dev": "nodemon",
     "lint": "echo \"lint placeholder\"",
-    "test": "jest",
     "test:watch": "jest --watch",
-    "test:ci": "jest --runInBand --ci",
     "build": "tsc",
     "start": "node dist/src/index.js",
     "generate:openapi": "node ./scripts/generate-openapi.js",
-    "test:int:db": "dotenv -e .env.test -- npx prisma migrate reset --force",
-    "test:int": "dotenv -e .env.test -- jest --runInBand --testMatch \"<rootDir>/src/__tests__/integration/**/*.test.ts\""
+    "test:int:db": "npm run test:db:reset",
+    "test:int": "dotenv -e .env.test -- jest --runInBand --testMatch \"<rootDir>/src/__tests__/integration/**/*.test.ts\"",
+    "test": "dotenv -e .env.test -- jest",
+    "test:ci": "dotenv -e .env.test -- jest --runInBand --ci --detectOpenHandles",
+    "test:db:reset": "powershell -ExecutionPolicy Bypass -File scripts/reset-test-db.ps1"
   },
   "keywords": [],
   "author": "",
