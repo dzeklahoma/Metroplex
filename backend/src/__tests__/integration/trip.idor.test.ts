@@ -56,6 +56,7 @@ describe("integration: IDOR / ownership checks", () => {
         daysCount: 2,
         interests: "culture",
         budget: 200,
+        startDate: "2026-07-01",
       });
 
     expect(created.status).toBe(201);

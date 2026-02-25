@@ -8,13 +8,14 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: metroplex
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   backend:
     build:
       context: ./backend
+      target: prod
     container_name: metroplex_backend
     restart: always
     depends_on:
@@ -22,6 +23,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/metroplex
       JWT_SECRET: supersecret
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3001
     ports:
       - "3001:3001"
 
@@ -34,6 +36,15 @@ services:
       - backend
     ports:
       - "5173:80"
-
+  backend_test:
+    build:
+      context: ./backend
+      target: test
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/metroplex_test?schema=public
+      JWT_SECRET: supersecret
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3001
 volumes:
   postgres_data:

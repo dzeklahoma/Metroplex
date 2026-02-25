@@ -9,17 +9,18 @@ export type Activity = {
   longitude?: number | null;
 };
 
-function shuffleInPlace<T>(arr: T[]): void {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-}
+export type DayWeather = {
+  date: string; // YYYY-MM-DD
+  precipitationProbability?: number;
+  precipitationMm?: number;
+};
 
 export type GenerateItineraryInput = {
   activities: Activity[];
   daysCount: number;
   interests: string;
+  startDate: Date;
+  weatherByDay?: DayWeather[];
 };
 
 export type GenerateItineraryResult = {
@@ -34,88 +35,99 @@ function normalizeInterests(interestsStr: string): string[] {
     .filter(Boolean);
 }
 
-function scoreActivity(activity: Activity, interests: string[]): number {
+function isOutdoor(activity: Activity): boolean {
+  const type = (activity.type || "").toLowerCase();
+
+  return (
+    type.includes("outdoor") ||
+    type.includes("nature") ||
+    type.includes("park") ||
+    type.includes("hiking") ||
+    type.includes("beach")
+  );
+}
+
+function scoreActivity(
+  activity: Activity,
+  interests: string[],
+  isRainyDay: boolean,
+): number {
   let score = 0;
 
   const type = (activity.type || "").toLowerCase();
 
-  // interest match: interest keyword u type
+  // Interest match
   for (const it of interests) {
     if (type.includes(it)) score += 3;
   }
 
-  // price: lower priceLevel = better
+  // Price scoring (lower = better)
   if (typeof activity.priceLevel === "number") {
-    score += Math.max(0, 6 - activity.priceLevel); // 1=>+5, 5=>+1
+    score += Math.max(0, 6 - activity.priceLevel);
   }
 
-  // duration: ideal 1-3h
+  // Ideal duration 1–3h
   if (typeof activity.durationHours === "number") {
-    if (activity.durationHours >= 1 && activity.durationHours <= 3) score += 2;
+    if (activity.durationHours >= 1 && activity.durationHours <= 3) {
+      score += 2;
+    }
+  }
+
+  // Weather penalty
+  if (isRainyDay && isOutdoor(activity)) {
+    score -= 3; // discourage outdoor on rain
   }
 
   return score;
 }
 
 /**
- * returns { days: Activity[][], warning: string|null }
+ * Generates itinerary grouped by days.
+ * Weather affects scoring per day.
  */
 export function generateItinerary({
   activities,
   daysCount,
   interests,
+  startDate,
+  weatherByDay,
 }: GenerateItineraryInput): GenerateItineraryResult {
   const interestsArr = normalizeInterests(interests);
 
-  const scored = activities.map((a) => ({
-    a,
-    s: scoreActivity(a, interestsArr),
-  }));
-
-  // sort by score desc
-  scored.sort((x, y) => y.s - x.s);
-
-  // take top pool (npr. 12 ili 20, zavisi koliko imaš aktivnosti)
-  const POOL = Math.min(scored.length, 20);
-  const pool = scored.slice(0, POOL);
-  const rest = scored.slice(POOL);
-
-  // shuffle only the top pool to get variation but keep quality
-  shuffleInPlace(pool);
-
-  // final ranked list: shuffled top + rest (still sorted)
-  const ranked = [...activities].sort((a, b) => {
-    const sb = scoreActivity(b, interestsArr);
-    const sa = scoreActivity(a, interestsArr);
-    const diff = sb - sa;
-    return diff !== 0 ? diff : Math.random() - 0.5;
-  });
-
-  // round-robin distribution (by days) with per-day limit
-  const days = Array.from({ length: daysCount }, () => [] as Activity[]);
+  const days: Activity[][] = Array.from({ length: daysCount }, () => []);
   const MAX_PER_DAY = 3;
 
-  let idx = 0;
+  // IMPORTANT: avoid duplicates across days
+  let remaining = [...activities];
 
-  for (const act of ranked) {
-    // try to place activity into a day that is not full
-    let attempts = 0;
+  for (let dayIndex = 0; dayIndex < daysCount; dayIndex++) {
+    const currentDate = new Date(startDate);
+    currentDate.setDate(startDate.getDate() + dayIndex);
 
-    while (attempts < daysCount) {
-      if (days[idx].length < MAX_PER_DAY) {
-        days[idx].push(act);
-        idx = (idx + 1) % daysCount;
-        break;
-      }
+    const isoDate = currentDate.toISOString().split("T")[0];
 
-      idx = (idx + 1) % daysCount;
-      attempts++;
-    }
+    const weather = weatherByDay?.find((w) => w.date === isoDate);
 
-    // if all days are full, stop placing activities
-    if (attempts === daysCount) {
-      break;
-    }
+    const isRainy =
+      !!weather &&
+      ((weather.precipitationProbability ?? 0) >= 50 ||
+        (weather.precipitationMm ?? 0) >= 2);
+
+    // On rainy days: prefer indoor if we have any indoor options left
+    const indoor = remaining.filter((a) => !isOutdoor(a));
+    const candidates = isRainy && indoor.length > 0 ? indoor : remaining;
+
+    const picked = candidates
+      .map((a) => ({ a, s: scoreActivity(a, interestsArr, isRainy) }))
+      .sort((x, y) => y.s - x.s)
+      .slice(0, MAX_PER_DAY)
+      .map((x) => x.a);
+
+    days[dayIndex] = picked;
+
+    // Remove picked from remaining so they cannot appear again
+    const pickedIds = new Set(picked.map((p) => p.id));
+    remaining = remaining.filter((a) => !pickedIds.has(a.id));
   }
 
   const warning =

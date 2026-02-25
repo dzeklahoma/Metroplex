@@ -4,6 +4,9 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../prisma";
 import { requireAuth } from "../middleware/requireAuth";
 import { hashToken } from "../utils/tokenHash";
+import { loginSchema, registerSchema } from "../validation/auth.schemas";
+import { authLimiter } from "../middleware/rateLimiters";
+import { cleanupRevokedTokens } from "../services/revokedTokenCleanup.service";
 
 /**
  * @swagger
@@ -169,21 +172,17 @@ function getJwtSecret(): string {
 // POST /api/auth/register
 router.post(
   "/register",
+  authLimiter,
   async (req: Request<{}, {}, RegisterBody>, res: Response) => {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
+      const parsed = registerSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res
           .status(400)
-          .json({ message: "Email and password are required." });
+          .json({ message: parsed.error.issues[0].message });
       }
 
-      if (password.length < 6) {
-        return res
-          .status(400)
-          .json({ message: "Password must be at least 6 characters." });
-      }
+      const { email, password } = parsed.data;
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
@@ -208,15 +207,17 @@ router.post(
 // POST /api/auth/login
 router.post(
   "/login",
+  authLimiter,
   async (req: Request<{}, {}, LoginBody>, res: Response) => {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
+      const parsed = loginSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res
           .status(400)
-          .json({ message: "Email and password are required." });
+          .json({ message: parsed.error.issues[0].message });
       }
+
+      const { email, password } = parsed.data;
 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user)
@@ -247,35 +248,41 @@ router.get("/me", requireAuth, (req: Request, res: Response) => {
   return res.json({ user: req.user });
 });
 
-router.post("/logout", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const token = req.token;
-    if (!token)
-      return res.status(401).json({ message: "Invalid or expired token" });
+router.post(
+  "/logout",
+  requireAuth,
+  authLimiter,
+  async (req: Request, res: Response) => {
+    try {
+      const token = req.token;
+      if (!token)
+        return res.status(401).json({ message: "Invalid or expired token" });
 
-    const exp = req.user?.exp;
-    if (!exp) return res.status(400).json({ message: "Token has no exp" });
+      const exp = req.user?.exp;
+      if (!exp) return res.status(400).json({ message: "Token has no exp" });
 
-    const tokenHash = hashToken(token);
-    const expiresAt = new Date(exp * 1000);
+      const tokenHash = hashToken(token);
+      const expiresAt = new Date(exp * 1000);
 
-    // optional cleanup
-    await prisma.revokedToken.deleteMany({
-      where: { expiresAt: { lt: new Date() } },
-    });
+      await cleanupRevokedTokens();
+      // optional cleanup
+      await prisma.revokedToken.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
 
-    // idempotent insert
-    await prisma.revokedToken.upsert({
-      where: { tokenHash },
-      update: { expiresAt },
-      create: { tokenHash, expiresAt },
-    });
+      // idempotent insert
+      await prisma.revokedToken.upsert({
+        where: { tokenHash },
+        update: { expiresAt },
+        create: { tokenHash, expiresAt },
+      });
 
-    return res.json({ message: "Logged out" });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Server error" });
-  }
-});
+      return res.json({ message: "Logged out" });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Server error" });
+    }
+  },
+);
 
 export default router;
