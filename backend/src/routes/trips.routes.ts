@@ -460,7 +460,15 @@ router.get("/:id", requireAuth, async (req, res) => {
 
     const trip = await prisma.trip.findUnique({
       where: { id: tripId },
-      include: {
+      select: {
+        id: true,
+        destination: true,
+        daysCount: true,
+        budget: true,
+        interests: true,
+        createdAt: true,
+        startDate: true,
+        weatherDailyJson: true,
         dayPlans: {
           orderBy: { dayNumber: "asc" },
           include: {
