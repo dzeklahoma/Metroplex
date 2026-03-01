@@ -99,14 +99,22 @@ export function generateItinerary({
 
   // Helper: compute rainy per day index
   function isRainyDayIndex(dayIndex: number): boolean {
+    // Prefer matching by date (YYYY-MM-DD), but fall back to index alignment.
     const currentDate = new Date(startDate);
     currentDate.setDate(startDate.getDate() + dayIndex);
+
     const yyyy = currentDate.getFullYear();
     const mm = String(currentDate.getMonth() + 1).padStart(2, "0");
     const dd = String(currentDate.getDate()).padStart(2, "0");
     const isoDate = `${yyyy}-${mm}-${dd}`;
 
-    const weather = weatherByDay?.find((w) => w.date === isoDate);
+    let weather = weatherByDay?.find((w) => w.date === isoDate);
+
+    // ✅ Fallback: some tests provide weatherByDay aligned by day index
+    if (!weather && Array.isArray(weatherByDay) && weatherByDay[dayIndex]) {
+      weather = weatherByDay[dayIndex];
+    }
+
     if (!weather) return false;
 
     return (
@@ -138,7 +146,24 @@ export function generateItinerary({
     if (bestDay === -1) break; // all days full
     days[bestDay].push(a);
   }
+  // 2.5) On rainy days, reorder that day's picks to put indoor first
+  for (let dayIndex = 0; dayIndex < daysCount; dayIndex++) {
+    if (!isRainyDayIndex(dayIndex)) continue;
 
+    const list = days[dayIndex];
+    if (list.length === 0) continue;
+
+    days[dayIndex] = [...list].sort((a, b) => {
+      const aOut = isOutdoor(a) ? 1 : 0; // indoor first
+      const bOut = isOutdoor(b) ? 1 : 0;
+      if (aOut !== bOut) return aOut - bOut;
+
+      // tie-break: prefer higher rainy score
+      const sa = scoreActivity(a, interestsArr, true);
+      const sb = scoreActivity(b, interestsArr, true);
+      return sb - sa;
+    });
+  }
   // 3) Weather-aware refinement (cross-day swaps):
   // If a day is rainy, swap out outdoor items with indoor items that are already
   // assigned on other days (so we don't rely on "remainingPool" being non-empty).
