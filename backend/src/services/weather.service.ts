@@ -64,9 +64,4 @@ export async function getDailyForecast(
     tempMaxC: tmax?.[i] ?? undefined,
     weatherCode: code?.[i] ?? undefined,
   }));
-  return dates.map((d, i) => ({
-    date: d,
-    precipitationProbability: prob?.[i] ?? undefined,
-    precipitationMm: mm?.[i] ?? undefined,
-  }));
 }
