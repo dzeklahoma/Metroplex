@@ -28,6 +28,39 @@ export type GenerateItineraryResult = {
   warning: string | null;
 };
 
+function xmur3(str: string) {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function () {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+
+function mulberry32(a: number) {
+  return function () {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seededShuffle<T>(arr: T[], seedStr: string): T[] {
+  const seedFn = xmur3(seedStr);
+  const rand = mulberry32(seedFn());
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 function normalizeInterests(interestsStr: string): string[] {
   return interestsStr
     .split(",")
@@ -84,6 +117,10 @@ function scoreActivity(
 /**
  * Generates itinerary grouped by days.
  * Weather affects scoring per day.
+ *
+ * IMPORTANT:
+ * - We filter out template/invalid activities by requiring coordinates.
+ *   This prevents template items from ever being scheduled.
  */
 export function generateItinerary({
   activities,
@@ -94,12 +131,19 @@ export function generateItinerary({
 }: GenerateItineraryInput): GenerateItineraryResult {
   const interestsArr = normalizeInterests(interests);
 
+  // ✅ Filter out template activities (they have null coords in your DB)
+  const usable = activities.filter(
+    (a) =>
+      a.latitude !== null &&
+      a.latitude !== undefined &&
+      a.longitude !== null &&
+      a.longitude !== undefined,
+  );
+
   const days: Activity[][] = Array.from({ length: daysCount }, () => []);
   const MAX_PER_DAY = 3;
 
-  // Helper: compute rainy per day index
   function isRainyDayIndex(dayIndex: number): boolean {
-    // Prefer matching by date (YYYY-MM-DD), but fall back to index alignment.
     const currentDate = new Date(startDate);
     currentDate.setDate(startDate.getDate() + dayIndex);
 
@@ -110,7 +154,7 @@ export function generateItinerary({
 
     let weather = weatherByDay?.find((w) => w.date === isoDate);
 
-    // ✅ Fallback: some tests provide weatherByDay aligned by day index
+    // fallback: tests may align by index
     if (!weather && Array.isArray(weatherByDay) && weatherByDay[dayIndex]) {
       weather = weatherByDay[dayIndex];
     }
@@ -122,16 +166,20 @@ export function generateItinerary({
       (weather.precipitationMm ?? 0) >= 2
     );
   }
+  // Make regenerate produce a different (but still good) plan each call.
+  // If you want different result per call, include time in seed.
+  const seed = `${startDate.toISOString()}|${interests}|${Date.now()}`;
 
-  // 1) Rank all activities once (baseline: not rainy) so "best" ones get spread out
-  const ranked = [...activities]
+  // shuffle first, then score+sort (keeps quality but avoids identical outputs)
+  const shuffled = seededShuffle(usable, seed);
+  // 1) Rank all usable activities once (baseline: not rainy)
+  const ranked = shuffled
     .map((a) => ({ a, s: scoreActivity(a, interestsArr, false) }))
-    .sort((x, y) => y.s - x.s)
+    .sort((x, y) => y.s - x.s || Math.random() - 0.5)
     .map((x) => x.a);
 
   // 2) Spread across days with round-robin and a per-day cap
   for (const a of ranked) {
-    // Find the day with the smallest load that still has room
     let bestDay = -1;
     let bestLen = Number.POSITIVE_INFINITY;
 
@@ -143,9 +191,10 @@ export function generateItinerary({
       }
     }
 
-    if (bestDay === -1) break; // all days full
+    if (bestDay === -1) break;
     days[bestDay].push(a);
   }
+
   // 2.5) On rainy days, reorder that day's picks to put indoor first
   for (let dayIndex = 0; dayIndex < daysCount; dayIndex++) {
     if (!isRainyDayIndex(dayIndex)) continue;
@@ -154,25 +203,23 @@ export function generateItinerary({
     if (list.length === 0) continue;
 
     days[dayIndex] = [...list].sort((a, b) => {
-      const aOut = isOutdoor(a) ? 1 : 0; // indoor first
+      const aOut = isOutdoor(a) ? 1 : 0;
       const bOut = isOutdoor(b) ? 1 : 0;
       if (aOut !== bOut) return aOut - bOut;
 
-      // tie-break: prefer higher rainy score
       const sa = scoreActivity(a, interestsArr, true);
       const sb = scoreActivity(b, interestsArr, true);
       return sb - sa;
     });
   }
-  // 3) Weather-aware refinement (cross-day swaps):
-  // If a day is rainy, swap out outdoor items with indoor items that are already
-  // assigned on other days (so we don't rely on "remainingPool" being non-empty).
+
+  // 3) Weather-aware refinement (cross-day swaps)
   for (let dayIndex = 0; dayIndex < daysCount; dayIndex++) {
     if (!isRainyDayIndex(dayIndex)) continue;
 
     const rainyDay = days[dayIndex];
     if (rainyDay.length === 0) continue;
-    // Ensure first slot is indoor on rainy days if any indoor exists anywhere
+
     if (rainyDay[0] && isOutdoor(rainyDay[0])) {
       let bestFirst: {
         fromDay: number;
@@ -207,7 +254,6 @@ export function generateItinerary({
       const current = rainyDay[i];
       if (!isOutdoor(current)) continue;
 
-      // Find the best indoor candidate from other days to swap in
       let best: {
         fromDay: number;
         fromIndex: number;
@@ -223,27 +269,30 @@ export function generateItinerary({
           const cand = list[j];
           if (isOutdoor(cand)) continue;
 
-          const s = scoreActivity(cand, interestsArr, true); // rainy scoring
+          const s = scoreActivity(cand, interestsArr, true);
           if (!best || s > best.score) {
             best = { fromDay: otherDay, fromIndex: j, a: cand, score: s };
           }
         }
       }
 
-      if (!best) break; // no indoor anywhere → can't improve
+      if (!best) break;
 
-      // Swap: indoor into rainy day, outdoor goes to the other day
       rainyDay[i] = best.a;
       days[best.fromDay][best.fromIndex] = current;
     }
   }
 
+  // ✅ Warning logic: if original had activities but none are usable (coords missing),
+  // show a clear message; otherwise keep your original warnings.
   const warning =
     activities.length === 0
       ? "No activities found for this destination."
-      : activities.length < daysCount
-        ? "Not enough activities for each day; some days may be sparse."
-        : null;
+      : usable.length === 0
+        ? "No mappable activities found (missing coordinates)."
+        : usable.length < daysCount
+          ? "Not enough activities for each day; some days may be sparse."
+          : null;
 
   return { days, warning };
 }
