@@ -1,16 +1,9 @@
 import { request } from "./http";
-import type { Trip, TripDetails } from "../types/models";
+import type { Trip, TripDetails, CreateTripInput } from "../types/models";
 
 export function getMyTrips() {
   return request<{ trips: Trip[] }>("/trips/my");
 }
-
-export type CreateTripInput = {
-  destination: string;
-  daysCount: number;
-  budget?: number;
-  interests: string;
-};
 
 export function createTrip(input: CreateTripInput) {
   return request<{ trip: { id: number } }>("/trips", {
@@ -24,10 +17,13 @@ export function getTripDetails(id: number) {
 }
 
 export function regenerateTrip(id: number, interests?: string) {
-  return request<{ ok: true }>(`/trips/${id}/regenerate`, {
-    method: "POST",
-    body: JSON.stringify(interests ? { interests } : {}),
-  });
+  return request<{ trip: TripDetails; warning?: string }>(
+    `/trips/${id}/regenerate`,
+    {
+      method: "POST",
+      body: JSON.stringify(interests ? { interests } : {}),
+    },
+  );
 }
 
 export function deleteTrip(id: number) {

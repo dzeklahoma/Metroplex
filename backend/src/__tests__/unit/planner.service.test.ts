@@ -38,7 +38,6 @@ describe("generateItinerary (unit)", () => {
     const activities = Array.from({ length: 50 }, (_, i) =>
       makeActivity(i + 1),
     );
-
     const res = generateItinerary({
       activities,
       daysCount: 2,
@@ -54,7 +53,6 @@ describe("generateItinerary (unit)", () => {
     const activities = Array.from({ length: 12 }, (_, i) =>
       makeActivity(i + 1),
     );
-
     const res = generateItinerary({
       activities,
       daysCount: 4,
@@ -84,7 +82,6 @@ describe("generateItinerary (unit)", () => {
 
   test("when activities.length < daysCount, warning is returned", () => {
     const activities = [makeActivity(1), makeActivity(2)];
-
     const res = generateItinerary({
       activities,
       daysCount: 5,

@@ -97,37 +97,145 @@ export function generateItinerary({
   const days: Activity[][] = Array.from({ length: daysCount }, () => []);
   const MAX_PER_DAY = 3;
 
-  // IMPORTANT: avoid duplicates across days
-  let remaining = [...activities];
-
-  for (let dayIndex = 0; dayIndex < daysCount; dayIndex++) {
+  // Helper: compute rainy per day index
+  function isRainyDayIndex(dayIndex: number): boolean {
+    // Prefer matching by date (YYYY-MM-DD), but fall back to index alignment.
     const currentDate = new Date(startDate);
     currentDate.setDate(startDate.getDate() + dayIndex);
 
-    const isoDate = currentDate.toISOString().split("T")[0];
+    const yyyy = currentDate.getFullYear();
+    const mm = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const dd = String(currentDate.getDate()).padStart(2, "0");
+    const isoDate = `${yyyy}-${mm}-${dd}`;
 
-    const weather = weatherByDay?.find((w) => w.date === isoDate);
+    let weather = weatherByDay?.find((w) => w.date === isoDate);
 
-    const isRainy =
-      !!weather &&
-      ((weather.precipitationProbability ?? 0) >= 50 ||
-        (weather.precipitationMm ?? 0) >= 2);
+    // ✅ Fallback: some tests provide weatherByDay aligned by day index
+    if (!weather && Array.isArray(weatherByDay) && weatherByDay[dayIndex]) {
+      weather = weatherByDay[dayIndex];
+    }
 
-    // On rainy days: prefer indoor if we have any indoor options left
-    const indoor = remaining.filter((a) => !isOutdoor(a));
-    const candidates = isRainy && indoor.length > 0 ? indoor : remaining;
+    if (!weather) return false;
 
-    const picked = candidates
-      .map((a) => ({ a, s: scoreActivity(a, interestsArr, isRainy) }))
-      .sort((x, y) => y.s - x.s)
-      .slice(0, MAX_PER_DAY)
-      .map((x) => x.a);
+    return (
+      (weather.precipitationProbability ?? 0) >= 50 ||
+      (weather.precipitationMm ?? 0) >= 2
+    );
+  }
 
-    days[dayIndex] = picked;
+  // 1) Rank all activities once (baseline: not rainy) so "best" ones get spread out
+  const ranked = [...activities]
+    .map((a) => ({ a, s: scoreActivity(a, interestsArr, false) }))
+    .sort((x, y) => y.s - x.s)
+    .map((x) => x.a);
 
-    // Remove picked from remaining so they cannot appear again
-    const pickedIds = new Set(picked.map((p) => p.id));
-    remaining = remaining.filter((a) => !pickedIds.has(a.id));
+  // 2) Spread across days with round-robin and a per-day cap
+  for (const a of ranked) {
+    // Find the day with the smallest load that still has room
+    let bestDay = -1;
+    let bestLen = Number.POSITIVE_INFINITY;
+
+    for (let d = 0; d < daysCount; d++) {
+      if (days[d].length >= MAX_PER_DAY) continue;
+      if (days[d].length < bestLen) {
+        bestLen = days[d].length;
+        bestDay = d;
+      }
+    }
+
+    if (bestDay === -1) break; // all days full
+    days[bestDay].push(a);
+  }
+  // 2.5) On rainy days, reorder that day's picks to put indoor first
+  for (let dayIndex = 0; dayIndex < daysCount; dayIndex++) {
+    if (!isRainyDayIndex(dayIndex)) continue;
+
+    const list = days[dayIndex];
+    if (list.length === 0) continue;
+
+    days[dayIndex] = [...list].sort((a, b) => {
+      const aOut = isOutdoor(a) ? 1 : 0; // indoor first
+      const bOut = isOutdoor(b) ? 1 : 0;
+      if (aOut !== bOut) return aOut - bOut;
+
+      // tie-break: prefer higher rainy score
+      const sa = scoreActivity(a, interestsArr, true);
+      const sb = scoreActivity(b, interestsArr, true);
+      return sb - sa;
+    });
+  }
+  // 3) Weather-aware refinement (cross-day swaps):
+  // If a day is rainy, swap out outdoor items with indoor items that are already
+  // assigned on other days (so we don't rely on "remainingPool" being non-empty).
+  for (let dayIndex = 0; dayIndex < daysCount; dayIndex++) {
+    if (!isRainyDayIndex(dayIndex)) continue;
+
+    const rainyDay = days[dayIndex];
+    if (rainyDay.length === 0) continue;
+    // Ensure first slot is indoor on rainy days if any indoor exists anywhere
+    if (rainyDay[0] && isOutdoor(rainyDay[0])) {
+      let bestFirst: {
+        fromDay: number;
+        fromIndex: number;
+        a: Activity;
+        score: number;
+      } | null = null;
+
+      for (let otherDay = 0; otherDay < daysCount; otherDay++) {
+        if (otherDay === dayIndex) continue;
+
+        const list = days[otherDay];
+        for (let j = 0; j < list.length; j++) {
+          const cand = list[j];
+          if (isOutdoor(cand)) continue;
+
+          const s = scoreActivity(cand, interestsArr, true);
+          if (!bestFirst || s > bestFirst.score) {
+            bestFirst = { fromDay: otherDay, fromIndex: j, a: cand, score: s };
+          }
+        }
+      }
+
+      if (bestFirst) {
+        const out = rainyDay[0];
+        rainyDay[0] = bestFirst.a;
+        days[bestFirst.fromDay][bestFirst.fromIndex] = out;
+      }
+    }
+
+    for (let i = 0; i < rainyDay.length; i++) {
+      const current = rainyDay[i];
+      if (!isOutdoor(current)) continue;
+
+      // Find the best indoor candidate from other days to swap in
+      let best: {
+        fromDay: number;
+        fromIndex: number;
+        a: Activity;
+        score: number;
+      } | null = null;
+
+      for (let otherDay = 0; otherDay < daysCount; otherDay++) {
+        if (otherDay === dayIndex) continue;
+
+        const list = days[otherDay];
+        for (let j = 0; j < list.length; j++) {
+          const cand = list[j];
+          if (isOutdoor(cand)) continue;
+
+          const s = scoreActivity(cand, interestsArr, true); // rainy scoring
+          if (!best || s > best.score) {
+            best = { fromDay: otherDay, fromIndex: j, a: cand, score: s };
+          }
+        }
+      }
+
+      if (!best) break; // no indoor anywhere → can't improve
+
+      // Swap: indoor into rainy day, outdoor goes to the other day
+      rainyDay[i] = best.a;
+      days[best.fromDay][best.fromIndex] = current;
+    }
   }
 
   const warning =

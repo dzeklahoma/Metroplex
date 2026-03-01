@@ -114,7 +114,6 @@ describe("integration: trip flow", () => {
       (sum: number, dp: any) => sum + (dp.plannedActivities?.length ?? 0),
       0,
     );
-
     expect(totalPlanned).toBeGreaterThan(0);
   });
 

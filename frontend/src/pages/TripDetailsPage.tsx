@@ -9,6 +9,43 @@ function getErrorMessage(e: unknown, fallback: string) {
   return e instanceof Error ? e.message : fallback;
 }
 
+function addDaysIso(startIso: string, days: number) {
+  const d = new Date(startIso);
+  if (Number.isNaN(d.getTime())) return ""; // ✅ guard
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function isRainy(
+  w?: { precipitationProbability?: number; precipitationMm?: number } | null,
+) {
+  if (!w) return false;
+  return (
+    (w.precipitationProbability ?? 0) >= 50 || (w.precipitationMm ?? 0) >= 2
+  );
+}
+
+function weatherIcon(code?: number) {
+  if (code === undefined || code === null) return "❓";
+  if (code === 0) return "☀️";
+  if ([1, 2, 3].includes(code)) return "⛅";
+  if ([45, 48].includes(code)) return "🌫️";
+  if ([51, 53, 55, 56, 57].includes(code)) return "🌦️";
+  if ([61, 63, 65, 66, 67].includes(code)) return "🌧️";
+  if ([71, 73, 75, 77].includes(code)) return "❄️";
+  if ([80, 81, 82].includes(code)) return "🌧️";
+  if ([85, 86].includes(code)) return "🌨️";
+  if ([95, 96, 99].includes(code)) return "⛈️";
+  return "🌤️";
+}
+
+function tempRange(w?: { tempMinC?: number; tempMaxC?: number } | null) {
+  const min = w?.tempMinC;
+  const max = w?.tempMaxC;
+  if (typeof min !== "number" || typeof max !== "number") return "";
+  return `${Math.round(min)}°–${Math.round(max)}°C`;
+}
+
 export function TripDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -124,7 +161,45 @@ export function TripDetailsPage() {
               <div className="grid gap-4">
                 {trip.dayPlans.map((day) => (
                   <Card key={day.id}>
-                    <h3 className="font-medium">Day {day.dayNumber}</h3>
+                    {(() => {
+                      const dateIso = trip.startDate
+                        ? addDaysIso(trip.startDate, day.dayNumber - 1)
+                        : "";
+                      const w = dateIso
+                        ? (trip.weatherDailyJson?.find(
+                            (x) => x.date === dateIso,
+                          ) ?? null)
+                        : null;
+                      const rainy = isRainy(w);
+                      const icon = weatherIcon(w?.weatherCode);
+                      const t = tempRange(w);
+                      return (
+                        <div className="flex flex-col gap-1">
+                          <h3 className="font-medium">
+                            Day {day.dayNumber} • {dateIso}
+                            {w ? (
+                              <span className="text-sm text-gray-600">
+                                {" "}
+                                • {icon} {t ? `${t} • ` : ""}
+                                {rainy ? "Rain expected" : "No rain expected"}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-500">
+                                {" "}
+                                • Weather unavailable
+                              </span>
+                            )}
+                          </h3>
+
+                          {rainy && (
+                            <div className="text-xs text-gray-500">
+                              Outdoor activities are deprioritized due to rain
+                              forecast.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <ul className="mt-3 space-y-2">
                       {day.plannedActivities.map((a) => (
