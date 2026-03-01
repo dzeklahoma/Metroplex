@@ -8,6 +8,7 @@ import { TripsPage } from "./pages/TripsPage";
 import { TripDetailsPage } from "./pages/TripDetailsPage";
 import { RoleRoute } from "./auth/RoleRoute";
 import { ActivitiesPage } from "./pages/ActivitiesPage";
+import "leaflet/dist/leaflet.css";
 
 function HomeRedirect() {
   const { token, loading } = useAuth();
