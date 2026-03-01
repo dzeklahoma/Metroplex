@@ -18,6 +18,8 @@ export type Trip = {
   budget?: number | null;
   interests: string;
   createdAt: string;
+  startDate: string;
+  weatherDailyJson?: DayWeather[] | null;
 };
 
 export type PlannedActivity = {
@@ -52,4 +54,22 @@ export type Activity = {
   type: string;
   priceLevel: number;
   durationHours: number;
+};
+
+export type CreateTripInput = {
+  destination: string;
+  daysCount: number;
+  interests: string;
+  startDate: string; // required by backend schema
+  budget?: number | null; // optional
+};
+
+export type DayWeather = {
+  date: string; // YYYY-MM-DD
+  precipitationProbability?: number;
+  precipitationMm?: number;
+
+  tempMinC?: number;
+  tempMaxC?: number;
+  weatherCode?: number;
 };

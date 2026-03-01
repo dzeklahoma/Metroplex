@@ -2,14 +2,17 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import * as tripsApi from "../api/tripsApi";
+import type { CreateTripInput } from "../types/models";
 
 function getErrorMessage(e: unknown, fallback: string) {
   return e instanceof Error ? e.message : fallback;
 }
-
+function todayISODate() {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+}
 export function CreateTripPage() {
   const navigate = useNavigate();
-
+  const [startDate, setStartDate] = useState(() => todayISODate());
   const [destination, setDestination] = useState("");
   const [daysCount, setDaysCount] = useState<number>(3);
   const [budget, setBudget] = useState<string>("");
@@ -44,10 +47,11 @@ export function CreateTripPage() {
 
     setSubmitting(true);
     try {
-      const payload: tripsApi.CreateTripInput = {
+      const payload: CreateTripInput = {
         destination: destination.trim(),
         daysCount,
         interests: interests.trim(),
+        startDate: startDate || todayISODate(),
       };
 
       const rawBudget = budget.trim();
@@ -55,6 +59,7 @@ export function CreateTripPage() {
         const budgetNum = Number(rawBudget);
         if (!Number.isFinite(budgetNum)) {
           setError("Budget must be a number");
+          setSubmitting(false); // ✅
           return;
         }
         payload.budget = budgetNum;
@@ -121,7 +126,15 @@ export function CreateTripPage() {
                 <div className="mt-1 text-sm text-red-600">{daysError}</div>
               )}
             </div>
-
+            <div>
+              <label className="text-sm font-medium">Start date</label>
+              <input
+                type="date"
+                className="mt-1 w-full rounded-xl border border-black/10 p-2 outline-none"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
             <div>
               <label className="text-sm font-medium">Budget (optional)</label>
               <input

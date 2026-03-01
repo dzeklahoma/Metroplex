@@ -4,6 +4,10 @@ export type DayWeather = {
   date: string; // YYYY-MM-DD
   precipitationProbability?: number;
   precipitationMm?: number;
+
+  tempMinC?: number;
+  tempMaxC?: number;
+  weatherCode?: number;
 };
 
 export async function getDailyForecast(
@@ -31,6 +35,10 @@ export async function getDailyForecast(
   url.searchParams.set("end_date", endDateIso);
   url.searchParams.set("timezone", "auto");
 
+  url.searchParams.set(
+    "daily",
+    "precipitation_probability_max,precipitation_sum,temperature_2m_min,temperature_2m_max,weathercode",
+  );
   const res = await fetch(url.toString(), {
     headers: { Accept: "application/json" },
   });
@@ -44,6 +52,18 @@ export async function getDailyForecast(
     json?.daily?.precipitation_probability_max ?? [];
   const mm: Array<number | null> = json?.daily?.precipitation_sum ?? [];
 
+  const tmin: Array<number | null> = json?.daily?.temperature_2m_min ?? [];
+  const tmax: Array<number | null> = json?.daily?.temperature_2m_max ?? [];
+  const code: Array<number | null> = json?.daily?.weathercode ?? [];
+
+  return dates.map((d, i) => ({
+    date: d,
+    precipitationProbability: prob?.[i] ?? undefined,
+    precipitationMm: mm?.[i] ?? undefined,
+    tempMinC: tmin?.[i] ?? undefined,
+    tempMaxC: tmax?.[i] ?? undefined,
+    weatherCode: code?.[i] ?? undefined,
+  }));
   return dates.map((d, i) => ({
     date: d,
     precipitationProbability: prob?.[i] ?? undefined,
