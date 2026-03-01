@@ -147,6 +147,36 @@ export function generateItinerary({
 
     const rainyDay = days[dayIndex];
     if (rainyDay.length === 0) continue;
+    // Ensure first slot is indoor on rainy days if any indoor exists anywhere
+    if (rainyDay[0] && isOutdoor(rainyDay[0])) {
+      let bestFirst: {
+        fromDay: number;
+        fromIndex: number;
+        a: Activity;
+        score: number;
+      } | null = null;
+
+      for (let otherDay = 0; otherDay < daysCount; otherDay++) {
+        if (otherDay === dayIndex) continue;
+
+        const list = days[otherDay];
+        for (let j = 0; j < list.length; j++) {
+          const cand = list[j];
+          if (isOutdoor(cand)) continue;
+
+          const s = scoreActivity(cand, interestsArr, true);
+          if (!bestFirst || s > bestFirst.score) {
+            bestFirst = { fromDay: otherDay, fromIndex: j, a: cand, score: s };
+          }
+        }
+      }
+
+      if (bestFirst) {
+        const out = rainyDay[0];
+        rainyDay[0] = bestFirst.a;
+        days[bestFirst.fromDay][bestFirst.fromIndex] = out;
+      }
+    }
 
     for (let i = 0; i < rainyDay.length; i++) {
       const current = rainyDay[i];
