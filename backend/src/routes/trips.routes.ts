@@ -310,19 +310,29 @@ router.post(
         ? await getDailyForecast(geo.lat, geo.lng, startIso, endIso)
         : [];
 
-      // 1) fetch activities for destination
+      // 1) fetch ONLY real (mappable) activities for destination
       const activities = await prisma.activity.findMany({
-        where: { destination },
+        where: {
+          destination,
+          latitude: { not: null },
+          longitude: { not: null },
+        },
       });
 
       // 2) generate plan in memory
-      const plan = generateItinerary({
-        activities,
-        daysCount: days,
-        interests,
-        startDate,
-        weatherByDay,
-      });
+      const plan =
+        activities.length === 0
+          ? {
+              days: Array.from({ length: days }, () => [] as Activity[]),
+              warning: "No mappable activities found (missing coordinates).",
+            }
+          : generateItinerary({
+              activities,
+              daysCount: days,
+              interests,
+              startDate,
+              weatherByDay,
+            });
 
       // 3) persist Trip + DayPlan + PlannedActivity in ONE transaction
       const savedTrip = await prisma.$transaction(
@@ -594,10 +604,15 @@ router.post(
           ? incomingInterests.trim()
           : base.interests;
 
-      // 4) Fetch activities (fallback if empty)
+      // 4) Fetch ONLY real (mappable) activities for destination
       const activities = await prisma.activity.findMany({
-        where: { destination: base.destination },
+        where: {
+          destination: base.destination,
+          latitude: { not: null },
+          longitude: { not: null },
+        },
       });
+
       const startIso = base.startDate.toISOString().slice(0, 10);
       const endDate = new Date(base.startDate);
       endDate.setDate(base.startDate.getDate() + base.daysCount - 1);
@@ -622,6 +637,7 @@ router.post(
           endIso,
         );
       }
+
       const plan =
         activities.length === 0
           ? {
@@ -629,7 +645,7 @@ router.post(
                 { length: base.daysCount },
                 () => [] as Activity[],
               ),
-              warning: "No activities found for destination",
+              warning: "No mappable activities found (missing coordinates).",
             }
           : generateItinerary({
               activities,

@@ -11,6 +11,8 @@ function makeActivity(id: number, overrides: Partial<Activity> = {}): Activity {
     type: "culture",
     durationHours: 2,
     priceLevel: 3,
+    latitude: 48.8566,
+    longitude: 2.3522,
     ...overrides,
   };
 }
@@ -65,6 +67,26 @@ describe("generateItinerary (unit)", () => {
     const unique = new Set(ids);
 
     expect(unique.size).toBe(ids.length);
+  });
+
+  test("when activities exist but none have coordinates, warning is returned and days are empty", () => {
+    const activities = [
+      makeActivity(1, { latitude: null, longitude: null }),
+      makeActivity(2, { latitude: null, longitude: null }),
+    ];
+
+    const res = generateItinerary({
+      activities,
+      daysCount: 2,
+      interests: "culture",
+      startDate: START_DATE,
+    });
+
+    expect(res.warning).toBe(
+      "No mappable activities found (missing coordinates).",
+    );
+    expect(res.days).toHaveLength(2);
+    expect(res.days.flat()).toHaveLength(0);
   });
 
   test("when activities is empty, warning is returned and days are empty arrays", () => {
@@ -140,6 +162,6 @@ describe("generateItinerary (unit)", () => {
       ],
     });
 
-    expect(res.days[0][0].type?.toLowerCase()).not.toContain("nature");
+    expect(res.days[0][0].type?.toLowerCase()).toContain("culture");
   });
 });
