@@ -13,7 +13,9 @@
     "test:int": "dotenv -e .env.test -- jest --runInBand --testMatch \"<rootDir>/src/__tests__/integration/**/*.test.ts\"",
     "test": "dotenv -e .env.test -- jest",
     "test:ci": "dotenv -e .env.test -- jest --runInBand --ci --detectOpenHandles",
-    "test:db:reset": "powershell -ExecutionPolicy Bypass -File scripts/reset-test-db.ps1"
+    "test:db:reset": "powershell -ExecutionPolicy Bypass -File scripts/reset-test-db.ps1",
+    "migrate:deploy": "prisma migrate deploy",
+    "prisma:generate": "prisma generate"
   },
   "keywords": [],
   "author": "",
