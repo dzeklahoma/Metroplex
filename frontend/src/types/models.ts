@@ -34,6 +34,8 @@ export type PlannedActivity = {
     cost?: number | null;
     durationMin?: number | null;
     destination?: string;
+    latitude?: number | null;
+    longitude?: number | null;
   } | null;
 };
 

@@ -4,6 +4,7 @@ import { Navbar } from "../components/Navbar";
 import { Card } from "../components/Card";
 import * as tripsApi from "../api/tripsApi";
 import type { TripDetails } from "../types/models";
+import TripDayMap from "../components/TripDayMap";
 
 function getErrorMessage(e: unknown, fallback: string) {
   return e instanceof Error ? e.message : fallback;
@@ -157,6 +158,14 @@ export function TripDetailsPage() {
                   </button>
                 </div>
               </div>
+
+              {/* ✅ Day map */}
+              <Card className="mb-4 p-4">
+                <h2 className="mb-3 text-sm font-medium text-gray-700">
+                  Map (select a day to view route)
+                </h2>
+                <TripDayMap trip={trip} />
+              </Card>
 
               <div className="grid gap-4">
                 {trip.dayPlans.map((day) => (
