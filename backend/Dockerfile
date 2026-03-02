@@ -21,6 +21,8 @@ COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+# copy helper scripts (for tsx / debugging inside container)
+COPY ./scripts ./scripts
 
 EXPOSE 3001
 CMD ["node", "dist/src/index.js"]
