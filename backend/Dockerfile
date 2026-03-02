@@ -25,7 +25,7 @@ COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY ./scripts ./scripts
 
 EXPOSE 3001
-CMD ["node", "dist/src/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/index.js"]
 
 # ---------- TEST STAGE (dev deps included) ----------
 FROM node:20-alpine AS test
